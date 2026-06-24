@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fleet/schemas/manifest.schema.json",
+  "title": "Project Manifest",
+  "description": "DRAFT v0.1 — the per-Project record that maps Git <-> Fleet drive <-> render outputs. The Submitter reads/writes this. Finalize in Session 5 (ADR).",
+  "type": "object",
+  "required": ["manifest_version", "project", "created", "inputs", "runs", "outputs"],
+  "additionalProperties": false,
+  "properties": {
+    "manifest_version": {
+      "type": "string",
+      "description": "Schema version of this manifest, e.g. '0.1'. Bump when the schema changes.",
+      "default": "0.1"
+    },
+    "project": {
+      "type": "string",
+      "description": "Filesystem-safe project name (matches the folder name)."
+    },
+    "description": {
+      "type": "string",
+      "description": "One line: what this project is."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["idle", "active", "shipped", "archived"],
+      "description": "Lifecycle status. Manual, free-form transitions for now.",
+      "default": "idle"
+    },
+    "base_path": {
+      "type": "string",
+      "description": "Absolute path to this project's root on the Fleet drive."
+    },
+    "created": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 creation timestamp."
+    },
+    "updated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of the last write."
+    },
+    "inputs": {
+      "type": "array",
+      "description": "Source assets registered to the project (the read-only originals in 00_input/).",
+      "items": {
+        "type": "object",
+        "required": ["id", "path"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "description": "Stable id for this input." },
+          "path": { "type": "string", "description": "Path on the Fleet drive (under 00_input/)." },
+          "type": { "type": "string", "description": "e.g. plate, frame, ref, footage." },
+          "added": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "runs": {
+      "type": "array",
+      "description": "Every logged execution of a Skill/step, written by the Submitter.",
+      "items": {
+        "type": "object",
+        "required": ["run_id", "skill", "started", "status"],
+        "additionalProperties": false,
+        "properties": {
+          "run_id": { "type": "string", "description": "Unique id (scheme TBD in Session 5)." },
+          "skill": { "type": "string", "description": "Skill/step that ran, e.g. 'depth-pass'." },
+          "started": { "type": "string", "format": "date-time" },
+          "finished": { "type": "string", "format": "date-time" },
+          "status": {
+            "type": "string",
+            "enum": ["running", "dispatched", "done", "failed"],
+            "description": "Run lifecycle. 'dispatched' = handed to Flamenco."
+          },
+          "params": { "type": "object", "description": "The step's settings.", "additionalProperties": true },
+          "input_ids": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Ids of inputs (from inputs[]) this run consumed."
+          },
+          "output_ids": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Ids of outputs (in outputs[]) this run produced."
+          },
+          "flamenco_job_id": {
+            "type": "string",
+            "description": "Set when the run was dispatched to Flamenco on Mckenna."
+          },
+          "logged_to_db": {
+            "type": "boolean",
+            "description": "True once mirrored to the Mckenna database.",
+            "default": false
+          },
+          "error": { "type": "string", "description": "Failure detail when status = failed." }
+        }
+      }
+    },
+    "outputs": {
+      "type": "array",
+      "description": "Artifacts produced by runs (depth passes, gen outputs, comps, deliverables).",
+      "items": {
+        "type": "object",
+        "required": ["id", "path", "kind", "from_run"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "path": { "type": "string", "description": "Path on the Fleet drive (01_depth/ … 04_output/)." },
+          "kind": {
+            "type": "string",
+            "enum": ["depth", "gen", "comp", "deliverable"],
+            "description": "Which pipeline stage produced it."
+          },
+          "version": { "type": "string", "description": "e.g. v001." },
+          "from_run": { "type": "string", "description": "run_id that produced this output." },
+          "approved": { "type": "boolean", "default": false }
+        }
+      }
+    }
+  }
+}
