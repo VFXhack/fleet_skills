@@ -2,120 +2,60 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://fleet/schemas/manifest.schema.json",
   "title": "Project Manifest",
-  "description": "DRAFT v0.1 — the per-Project record that maps Git <-> Fleet drive <-> render outputs. The Submitter reads/writes this. Finalize in Session 5 (ADR).",
+  "description": "THIN per-Project map header. Project identity + logical base_path + pointers that tie Git <-> Huxley store <-> Mckenna DB. It does NOT contain provenance: all Runs/Versions/Publishes/Deliveries (recipes + lineage) live in Mckenna's DB, and the Episode/Sequence/Shot/Asset structure is discovered by walking the deterministic tree (ADR 0003). See ADR 0002 (store/base_path), 0003 (structure), 0005 (artifact model).",
   "type": "object",
-  "required": ["manifest_version", "project", "created", "inputs", "runs", "outputs"],
+  "required": ["manifest_version", "client_code", "job_code", "title", "base_path", "created"],
   "additionalProperties": false,
   "properties": {
     "manifest_version": {
-      "type": "string",
-      "description": "Schema version of this manifest, e.g. '0.1'. Bump when the schema changes.",
-      "default": "0.1"
+      "type": "integer",
+      "description": "Schema version of THIS manifest format. Integer; bump by 1 on any breaking change. create-project writes the current version; a migration map upgrades older manifests.",
+      "const": 1
     },
-    "project": {
+    "client_code": {
       "type": "string",
-      "description": "Filesystem-safe project name (matches the folder name)."
+      "description": "Short client code, e.g. 'WBTV'. The top organizing folder; NOT part of a Shot's identity.",
+      "pattern": "^[A-Za-z0-9_-]+$"
     },
-    "description": {
+    "job_code": {
       "type": "string",
-      "description": "One line: what this project is."
+      "description": "Job (= Project) code, e.g. 'AWA'. Identifies the Project.",
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable Project title, e.g. 'Are We Alone'."
     },
     "status": {
       "type": "string",
-      "enum": ["idle", "active", "shipped", "archived"],
-      "description": "Lifecycle status. Manual, free-form transitions for now.",
-      "default": "idle"
+      "enum": ["active", "idle", "delivered", "archived"],
+      "description": "Lifecycle status. Manual transitions for now.",
+      "default": "active"
     },
     "base_path": {
       "type": "string",
-      "description": "Absolute path to this project's root on the Fleet drive."
+      "description": "Logical, platform-neutral Project root: 'fleet:/projects/<client_code>/<job_code>/'. Each machine resolves this to a real path via Fleet-level config (Windows UNC over Tailscale, Unix mount, macOS mount) — the real path is NOT stored here. Canonical store is on Huxley (ADR 0002).",
+      "pattern": "^fleet:/projects/[^/]+/[^/]+/$"
     },
     "created": {
       "type": "string",
-      "format": "date-time",
-      "description": "ISO 8601 creation timestamp."
+      "format": "date",
+      "description": "ISO 8601 date the Project was created."
     },
     "updated": {
       "type": "string",
-      "format": "date-time",
-      "description": "ISO 8601 timestamp of the last write."
+      "format": "date",
+      "description": "ISO 8601 date of the last manifest write."
     },
-    "inputs": {
-      "type": "array",
-      "description": "Source assets registered to the project (the read-only originals in 00_input/).",
-      "items": {
-        "type": "object",
-        "required": ["id", "path"],
-        "additionalProperties": false,
-        "properties": {
-          "id": { "type": "string", "description": "Stable id for this input." },
-          "path": { "type": "string", "description": "Path on the Fleet drive (under 00_input/)." },
-          "type": { "type": "string", "description": "e.g. plate, frame, ref, footage." },
-          "added": { "type": "string", "format": "date-time" }
-        }
-      }
+    "db_project_id": {
+      "type": ["string", "null"],
+      "description": "Pointer to this Project's record in Mckenna's DB, where all provenance lives. Null until the Project is registered in the DB.",
+      "default": null
     },
-    "runs": {
-      "type": "array",
-      "description": "Every logged execution of a Skill/step, written by the Submitter.",
-      "items": {
-        "type": "object",
-        "required": ["run_id", "skill", "started", "status"],
-        "additionalProperties": false,
-        "properties": {
-          "run_id": { "type": "string", "description": "Unique id (scheme TBD in Session 5)." },
-          "skill": { "type": "string", "description": "Skill/step that ran, e.g. 'depth-pass'." },
-          "started": { "type": "string", "format": "date-time" },
-          "finished": { "type": "string", "format": "date-time" },
-          "status": {
-            "type": "string",
-            "enum": ["running", "dispatched", "done", "failed"],
-            "description": "Run lifecycle. 'dispatched' = handed to Flamenco."
-          },
-          "params": { "type": "object", "description": "The step's settings.", "additionalProperties": true },
-          "input_ids": {
-            "type": "array",
-            "items": { "type": "string" },
-            "description": "Ids of inputs (from inputs[]) this run consumed."
-          },
-          "output_ids": {
-            "type": "array",
-            "items": { "type": "string" },
-            "description": "Ids of outputs (in outputs[]) this run produced."
-          },
-          "flamenco_job_id": {
-            "type": "string",
-            "description": "Set when the run was dispatched to Flamenco on Mckenna."
-          },
-          "logged_to_db": {
-            "type": "boolean",
-            "description": "True once mirrored to the Mckenna database.",
-            "default": false
-          },
-          "error": { "type": "string", "description": "Failure detail when status = failed." }
-        }
-      }
-    },
-    "outputs": {
-      "type": "array",
-      "description": "Artifacts produced by runs (depth passes, gen outputs, comps, deliverables).",
-      "items": {
-        "type": "object",
-        "required": ["id", "path", "kind", "from_run"],
-        "additionalProperties": false,
-        "properties": {
-          "id": { "type": "string" },
-          "path": { "type": "string", "description": "Path on the Fleet drive (01_depth/ … 04_output/)." },
-          "kind": {
-            "type": "string",
-            "enum": ["depth", "gen", "comp", "deliverable"],
-            "description": "Which pipeline stage produced it."
-          },
-          "version": { "type": "string", "description": "e.g. v001." },
-          "from_run": { "type": "string", "description": "run_id that produced this output." },
-          "approved": { "type": "boolean", "default": false }
-        }
-      }
+    "links": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Optional external pointers, e.g. { \"notion\": \"https://...\" }."
     }
   }
 }

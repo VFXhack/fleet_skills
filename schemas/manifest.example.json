@@ -1,51 +1,14 @@
 {
-  "manifest_version": "0.1",
-  "project": "acme-teaser-01",
-  "description": "15s teaser for Acme launch — CG plate to gen-AI video.",
+  "manifest_version": 1,
+  "client_code": "WBTV",
+  "job_code": "AWA",
+  "title": "Are We Alone",
   "status": "active",
-  "base_path": "/mnt/fleet/projects/acme-teaser-01",
-  "created": "2026-07-01T13:05:00-07:00",
-  "updated": "2026-07-01T14:20:00-07:00",
-  "inputs": [
-    {
-      "id": "in-001",
-      "path": "00_input/plate_shot010.exr",
-      "type": "plate",
-      "added": "2026-07-01T13:06:00-07:00"
-    }
-  ],
-  "runs": [
-    {
-      "run_id": "run-20260701-0001",
-      "skill": "depth-pass",
-      "started": "2026-07-01T13:40:00-07:00",
-      "finished": "2026-07-01T13:42:30-07:00",
-      "status": "done",
-      "params": { "model": "TODO", "resolution": "2048", "normalize": true },
-      "input_ids": ["in-001"],
-      "output_ids": ["out-001"],
-      "logged_to_db": true
-    },
-    {
-      "run_id": "run-20260701-0002",
-      "skill": "fal-runner",
-      "started": "2026-07-01T14:10:00-07:00",
-      "status": "dispatched",
-      "params": { "model": "TODO-gen-model", "guidance": "depth", "frames": 360 },
-      "input_ids": ["in-001"],
-      "output_ids": [],
-      "flamenco_job_id": "flmn-5521",
-      "logged_to_db": true
-    }
-  ],
-  "outputs": [
-    {
-      "id": "out-001",
-      "path": "01_depth/shot010_depth_v001.exr",
-      "kind": "depth",
-      "version": "v001",
-      "from_run": "run-20260701-0001",
-      "approved": false
-    }
-  ]
+  "base_path": "fleet:/projects/WBTV/AWA/",
+  "created": "2026-06-24",
+  "updated": "2026-06-24",
+  "db_project_id": null,
+  "links": {
+    "notion": "https://www.notion.so/..."
+  }
 }
