@@ -5,7 +5,8 @@
 > It is the source of truth for what words *mean*. Keep it tight. Sharpen terms here
 > via `grill-with-docs` sessions; record non-obvious decisions as ADRs in `/adr`.
 >
-> **Status:** v0.3 (2026-06-24) — Session 1 grilling. ADRs 0002–0008 written. Branch 4 (DB) landed.
+> **Status:** v0.4 (2026-06-25) — Session 2 implementation. Postgres core live on Mckenna + Huxley
+> canonical store wired; `create-project` built (`fleet` package). ADRs 0002–0011.
 
 ---
 
@@ -122,8 +123,12 @@ A **versioned input used to make the gen-AI video**, bound into a Shot in a **Ro
 either a **Publish** (an internal gen-AI output re-entering the pipeline) or an **Import** (an
 external file). Lives **flat** and **descriptively named** in one of two scopes (`<Job>/assets/`
 shared, `<Shot>/assets/` shot-specific — see *Asset scoping*). An Asset has **versions**; the system
-resolves its **promoted** version (its current **Publish**/Import) when writing prompts and wiring
-workflows. *How* a **Version** uses an Asset is its **Role**.
+resolves its **resolved content** (the **Publish**/Import currently selected) when writing prompts and
+wiring workflows. *How* a **Version** uses an Asset is its **Role**.
+_Avoid_: calling an Asset's resolved content its "promoted" version — **promote** is reserved for the
+**gate verb** (Version→Publish→Delivery). An Asset's content may be a Publish (which *did* cross a gate)
+or an Import (which never does), so the neutral term **resolved** covers both — and sidesteps the
+**promote/prompt** look-alike.
 _Avoid_: using "Asset" for a CG **entity** (a modeled character/environment) — reserved, unused for now.
 
 ### Reference / Role
@@ -148,8 +153,9 @@ There is **no** Episode- or Sequence-level asset folder; if an asset is shared b
 it goes in `<Job>/assets/`. Shot **outputs** (Versions, Publishes) are **not** Assets and live
 in their own per-Shot subfolders. Assets are stored **flat** and named **descriptively** for
 what they are (e.g. `main character sheet`, `desert environment`) — not bucketed by type or role.
-An Asset's content is a **Publish** or an **Import**; the file in `assets/` is its **promoted**
-version, and its Role is recorded per-use on the **Version's recipe**, not in the folder.
+An Asset's content is a **Publish** or an **Import**; the file in `assets/` is its **resolved**
+content (the currently-selected Publish/Import — see *Asset*), and its Role is recorded per-use on
+the **Version's recipe**, not in the folder.
 
 ### Project folders
 The named buckets inside a Project (Job). Full canonical tree in **ADR 0003**.
@@ -259,8 +265,12 @@ on half the boxes. The canonical store is on **Huxley** under a shared parent (t
 tree, alongside renders). Windows reaches it by UNC over Tailscale (`\\huxley\…`); Huxley is
 also reachable by `ssh andy@huxley`. Resolution per machine:
 - Logical (in Manifest): `fleet:/projects/<client_code>/<job_code>/`
-- Huxley (Unix, canonical): `…/io/common/projects/<client_code>/<job_code>/`
-- Watts / Leary (Windows): `\\huxley\…\projects\<client_code>\<job_code>\` *(exact share TBD)*
+- Huxley (Unix, canonical): `/nvme1/comfyui/io_common/projects/<client_code>/<job_code>/`
+- Watts / Leary (Windows): `\\huxley\io_common\projects\<client_code>\<job_code>\` (Samba **`io_common`** share)
+
+Resolved per-machine via Fleet config (`~/.fleet/config.toml` → `[paths].projects_root`). **Note:** ADR-0002
+was decided but not yet executed — real projects still sit on Watts-local `W:\Projects`; new projects
+scaffold to Huxley, and the existing ones migrate over (tracked with the ADR-0003 legacy migration).
 
 ### Context (DDD)
 A bounded area that speaks one shared language, documented in a `CONTEXT.md`.
@@ -301,8 +311,9 @@ trade-offs downstream.
 - Naming: confirmed **"skill"** for Claude Code skills, **"spell"** for Spellbook entries. ✅
 - **Project store** lives on **Huxley**; `base_path` is platform-neutral + resolved per-machine. ✅ (→ ADR 0002)
 - **Project structure** — hierarchy, shot-centric layout, two-tier assets, `_ops/`, per-Episode deliverables. ✅ (→ ADR 0003)
-- Deferred config (non-blocking): exact absolute Huxley `io/common` prefix + the Windows share name;
-  the per-machine **fleet repo clone path** (logical root resolved per workstation, like `base_path`).
+- Deferred config: Huxley `io/common` prefix (`/nvme1/comfyui/io_common`) + Windows share name
+  (`io_common`) — **resolved** (Session 2). Still open: the per-machine **fleet repo clone path**
+  (logical root resolved per workstation, like `base_path`).
 - Whether the **Episode** token appears in the Shot code (`AWA_SALEM_010` vs `AWA_EP01_SALEM_010`) — **to confirm**.
 - **Reconciled vs. prior UL handoff:** spine terms (Episode/Sequence), Generation/Publish split,
   Asset-over-Reference + Role-as-metadata. ✅ (→ ADR 0004)
@@ -319,4 +330,15 @@ trade-offs downstream.
 - **Branch 3 — Spellbook location** — a `spellbook/` folder in **this repo**, distributed by the Git
   remote (clone + pull per machine); Notion demoted. ✅ (→ ADR 0009)
 - **Branch 5 — Griptape** — separate conductor above an atomic Submitter, joined at `VersionRecorded`. ✅ (→ ADR 0010)
+- **Session 2 reconciliation (implementation):** ADR-0003 is **confirmed the target** — the live
+  hand-made projects (e.g. `WBTV/AWA`) are **non-conforming legacy** (task-centric folders like
+  `AI_Frames/`,`AI_Renders/`; flat `v##`-in-filename takes; Notion log), to be **migrated, not
+  emulated**. The existing **fal_runner** (`D:\Tools\fal_runner\submit.py` + per-shot `run_*.ps1` +
+  `*.toml` + Notion) and **comfy_runner** predate the grilling: they work when run by hand but are
+  **not aligned** with ADR-0003 or this UL, and will be **realigned** (paths → ADR-0003 tree;
+  provenance → Postgres). ✅
+- **Runner** *(to formalize — not yet an ADR):* a **provider-specific backend the Submitter dispatches
+  to** (fal, Comfy, …) — distinct from the one atomic **Submitter**. Each legacy runner is today a
+  mini-submitter, to be folded behind the Submitter. **New:** add a **Magnific** runner
+  (https://docs.magnific.com/introduction) for AI upscale/enhance → output in `<Shot>/versions/upscale/`.
 - **Branch 6 — real depth-pass method** — pull actual steps to replace the `depth-pass` SKILL.md TODOs. **Next.**
