@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 *.egg-info/
 .pytest_cache/
+
+# Runner output (generated media)
+magnific_out/
+scratch_magnific/

@@ -56,3 +56,13 @@ def get_projects_root() -> str:
             f"No projects_root. Set FLEET_PROJECTS_ROOT or add [paths].projects_root to {CONFIG_PATH}."
         )
     return root
+
+
+def get_magnific_api_key() -> str:
+    """API key for the Magnific (formerly Freepik) API."""
+    key = _resolve("MAGNIFIC_API_KEY", "magnific", "api_key")
+    if not key:
+        raise RuntimeError(
+            f"No Magnific API key. Set MAGNIFIC_API_KEY or add [magnific].api_key to {CONFIG_PATH}."
+        )
+    return key
