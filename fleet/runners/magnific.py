@@ -39,12 +39,13 @@ _TERMINAL_BAD = {"FAILED", "ERROR"}
 @dataclass(frozen=True)
 class Model:
     name: str             # friendly name used on the CLI
-    category: str         # path segment, e.g. "text-to-image" | "image-to-video"
-    slug: str             # endpoint slug under /v1/ai/<category>/<slug>
+    category: str         # REST path segment (text-to-image|image-to-video) OR MCP tool family
+    slug: str             # REST slug under /v1/ai/<category>/<slug>, or the MCP video_generate slug
     kind: str             # "image" | "video"
+    dispatch: str = "rest"        # "rest" (headless api-key) | "mcp" (agent-driven, OAuth)
     needs_image: bool = False     # requires an input image
     image_mode: str = "image_url"  # "reference_images" | "image_url" — how to attach --image
-    verified: bool = False         # contract confirmed against the live API
+    verified: bool = False         # contract confirmed against the live surface
     notes: str = ""
 
 
@@ -54,9 +55,12 @@ class Model:
 # NANO BANANA — full set on the API is the two Pro tiers below. There is no `nano-banana-2`
 # slug; "Nano Banana Pro" IS the Gemini-3 / "2" generation (pro = full tier, pro-flash = fast).
 #
-# SEEDANCE 2.0 — NOT exposed on the REST API yet (every text-to-video / image-to-video slug form
-# 404s as of 2026-06-25). It has a website/playground presence but no api-reference endpoint.
-# Add it here the moment the real slug is known (via the Magnific MCP catalog or the dashboard).
+# SEEDANCE 2.0 — slug confirmed via the Magnific MCP catalog (video_models_list, 2026-06-25), but
+# the slugs are MCP-ONLY: re-probed all four against REST /v1/ai/{image-to-video,text-to-video,
+# video-generator}/<slug> and every one 404s (control nano-banana slug still 400s -> probe valid).
+# So these dispatch="mcp": the headless REST runner can't self-serve them; it emits an MCP dispatch
+# spec for the agent/Submitter to run through the Magnific MCP `video_generate` tool. See
+# scratch_magnific/probe_seedance.py and ADR-0003 hybrid-dispatch decision.
 MODELS: dict[str, Model] = {
     "nano-banana-pro-flash": Model(
         name="nano-banana-pro-flash",
@@ -99,7 +103,83 @@ MODELS: dict[str, Model] = {
         verified=True,
         notes="LTX 2.0 (fast) i2v. Requires prompt + image_url. Optional aspect_ratio, duration.",
     ),
+    # --- Seedance 2.0 family: MCP-only (dispatch via Magnific MCP `video_generate`, not REST) ---
+    # MCP required inputs: prompt + duration + aspectRatio + resolution (camelCase). t2v by default;
+    # optional keyframes.start/end (image), references[] (image/video/character/product/style/audio),
+    # cameraMotion vocab, native sound effects. durations 4-15s.
+    "seedance-2.0": Model(
+        name="seedance-2.0",
+        category="video-generator",
+        slug="bytedance-seedance-pro-2.0",
+        kind="video",
+        dispatch="mcp",
+        verified=True,
+        notes="Seedance 2.0 Pro (SOTA, rank 1). res 4K/1080p/720p/480p. Best overall: realistic, native audio, lipsync, references.",
+    ),
+    "seedance-2.0-fast": Model(
+        name="seedance-2.0-fast",
+        category="video-generator",
+        slug="bytedance-seedance-fast-2.0",
+        kind="video",
+        dispatch="mcp",
+        verified=True,
+        notes="Seedance 2.0 Fast (rank 3). res 720p/480p. Fast drafts with Seedance controls / native audio.",
+    ),
+    "seedance-2.0-mini": Model(
+        name="seedance-2.0-mini",
+        category="video-generator",
+        slug="bytedance-seedance-mini-2.0",
+        kind="video",
+        dispatch="mcp",
+        verified=True,
+        notes="Seedance 2.0 Mini (rank 2, best value). res 720p/480p. Best quality/price for 4-15s with native audio.",
+    ),
+    "seedance-1.5-pro": Model(
+        name="seedance-1.5-pro",
+        category="video-generator",
+        slug="bytedance-seedance-pro-1.5",
+        kind="video",
+        dispatch="mcp",
+        verified=True,
+        notes="Seedance 1.5 Pro. res 1080p/720p/480p/Draft. Older gen; start/end keyframes, sound effects.",
+    ),
 }
+
+
+def build_mcp_spec(model: Model, args: argparse.Namespace) -> dict:
+    """Build the dispatch spec for an MCP-only model. The headless runner cannot call the
+    OAuth MCP surface itself, so it emits this spec for the agent/Submitter to feed into the
+    Magnific MCP `video_generate` tool (camelCase fields, slug verbatim)."""
+    params: dict = {"slug": model.slug}
+    if args.prompt:
+        params["prompt"] = args.prompt
+    if args.duration is not None:
+        params["duration"] = args.duration
+    if args.aspect_ratio is not None:
+        params["aspectRatio"] = args.aspect_ratio
+    if args.resolution is not None:
+        params["resolution"] = args.resolution
+    if args.image:
+        # A start frame goes in keyframes.start; a plain reference image goes in references[].
+        params["keyframes"] = {"start": {"type": "image", "url": args.image}}
+    for item in args.extra or []:
+        key, _, raw = item.partition("=")
+        params[key.strip()] = _coerce(raw.strip())
+    missing = [f for f in ("prompt", "duration", "aspectRatio", "resolution") if f not in params]
+    return {"tool": "video_generate", "model": model.name, "params": params, "missing_required": missing}
+
+
+def dispatch_mcp(model: Model, args: argparse.Namespace) -> int:
+    """Headless runner can't reach the OAuth MCP surface; emit a spec and exit non-zero (2)
+    so a caller knows this needs the agent/MCP path rather than REST."""
+    import json
+    spec = build_mcp_spec(model, args)
+    print(f"model    : {model.name}  (MCP-only — slug {model.slug})", file=sys.stderr)
+    print("note     : not on the REST API; run via the Magnific MCP `video_generate` tool.", file=sys.stderr)
+    if spec["missing_required"]:
+        print(f"missing  : required field(s) {spec['missing_required']}", file=sys.stderr)
+    print(json.dumps(spec, indent=2))  # spec to stdout for an agent/Submitter to consume
+    return 2
 
 
 def _headers() -> dict:
@@ -249,7 +329,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.list_models:
         for name, m in sorted(MODELS.items()):
             flag = "ok " if m.verified else "?? "
-            print(f"  [{flag}] {name:24s} {m.category:16s} {m.kind:6s} {m.notes}")
+            print(f"  [{flag}] {name:18s} {m.dispatch:4s} {m.category:16s} {m.kind:6s} {m.notes}")
         return 0
 
     if not args.model:
@@ -261,6 +341,9 @@ def main(argv: list[str] | None = None) -> int:
         sys.exit(f"error: model '{model.name}' needs --image")
     if not args.prompt and not args.image:
         sys.exit("error: provide --prompt and/or --image")
+
+    if model.dispatch == "mcp":
+        return dispatch_mcp(model, args)
 
     payload = build_payload(model, args)
     endpoint = f"{BASE_URL}/v1/ai/{model.category}/{model.slug}"
