@@ -12,7 +12,14 @@ NOTE: the public docs are unreliable for exact slugs (mid-rebrand Freepik -> Mag
 WebFetch'd reference even hallucinates slugs). The MODELS registry below is therefore grounded
 in the LIVE API: each slug was confirmed by POSTing an empty payload and reading the API's own
 validation response (a real slug 400s on missing fields; a fake slug 404s) — a probe that costs
-no credits. To re-probe or extend the registry, see scratchpad/probe_slugs.py.
+no credits. To re-probe or extend the registry, see scratch_magnific/probe_slugs.py.
+
+TWO model surfaces:
+  - MODELS (below): the curated, CLI-addressable (--model) set. REST models the headless runner
+    generates directly; the four Seedance entries are dispatch="mcp" (handed off, see dispatch_mcp).
+  - magnific_catalog.json (--list-catalog): a full snapshot of EVERY model the Magnific MCP exposes
+    (47 video + 46 image + 3 upscale, all MCP-dispatch/OAuth/agent-run). Reference catalog, not all
+    hand-authored as MODELS; regenerate from the live *_models_list MCP tools.
 """
 
 from __future__ import annotations
@@ -182,6 +189,40 @@ def dispatch_mcp(model: Model, args: argparse.Namespace) -> int:
     return 2
 
 
+# Full MCP catalog snapshot (every model the Magnific MCP exposes — all MCP-dispatch, agent-run).
+# A reference companion to the curated MODELS dict above; regenerate from the live
+# video_models_list / images_models_list / video_upscale_models_list tools. See the file's _meta.
+_CATALOG_PATH = Path(__file__).with_name("magnific_catalog.json")
+
+
+def load_catalog() -> dict:
+    import json
+    return json.loads(_CATALOG_PATH.read_text(encoding="utf-8"))
+
+
+def list_catalog(kind: str | None = None, search: str | None = None) -> int:
+    cat = load_catalog()
+    kinds = [kind] if kind else ["video", "image", "upscale"]
+    needle = (search or "").lower()
+    for k in kinds:
+        rows = cat.get(k, [])
+        printed = []
+        for m in rows:
+            slug = m.get("slug") or m.get("id", "")
+            name = m.get("name", "")
+            tier = m.get("tier", "")
+            blob = f"{slug} {name} {m.get('api','')} {m.get('summary','')}".lower()
+            if needle and needle not in blob:
+                continue
+            rec = f" [{tier}#{m.get('rank','')}]" if tier else ""
+            extra = m.get("api") or (",".join(m.get("required", [])[:2]) if k == "upscale" else "")
+            printed.append(f"  {slug:30s} {extra:12s}{rec:10s} {name}")
+        if printed:
+            print(f"== {k} ({len(printed)}) ==")
+            print("\n".join(printed))
+    return 0
+
+
 def _headers() -> dict:
     return {"x-magnific-api-key": config.get_magnific_api_key()}
 
@@ -322,9 +363,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--webhook-url", dest="webhook_url", help="optional async callback URL")
     parser.add_argument("--out", default="magnific_out", help="output directory (default: ./magnific_out)")
     parser.add_argument("--stem", help="output filename stem (default: <model>_<task_id8>)")
-    parser.add_argument("--list-models", action="store_true", help="list known models and exit")
+    parser.add_argument("--list-models", action="store_true",
+                        help="list curated/addressable models (REST + Seedance) and exit")
+    parser.add_argument("--list-catalog", action="store_true",
+                        help="list the full MCP catalog snapshot (all video/image/upscale models) and exit")
+    parser.add_argument("--kind", choices=("video", "image", "upscale"),
+                        help="with --list-catalog: restrict to one kind")
+    parser.add_argument("--search", help="with --list-catalog: case-insensitive filter")
     parser.add_argument("--dry-run", action="store_true", help="print the request and exit")
     args = parser.parse_args(argv)
+
+    if args.list_catalog:
+        return list_catalog(args.kind, args.search)
 
     if args.list_models:
         for name, m in sorted(MODELS.items()):
