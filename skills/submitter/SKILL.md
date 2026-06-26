@@ -51,6 +51,16 @@ ingest  →  log  →  pass
 - (When dispatched) a Flamenco job id linked to the Run.
 
 ## Open questions (resolve in Session 5 → ADR)
+- **Runner dispatch surfaces — headless vs agent.** Runners split by surface (see
+  `fleet/runners/magnific.py`): REST runners (api-key) the atomic Submitter can call
+  **headless**; MCP runners (OAuth, e.g. Magnific `video_generate` → Seedance 2.0) that only an
+  **agent** can call (this Claude Code now; **Hermes**/Griptape later). The MCP runner already
+  **emits a dispatch spec** (`{tool, slug, params, missing_required}`); decide who *executes* it.
+  Recommended shape (deferred 2026-06-25): the **agent/conductor runs the MCP tool** (per ADR-0010 the
+  atomic Submitter can't, and shouldn't, orchestrate or hold OAuth), then a **plain-Python finalizer**
+  downloads the asset into `<Shot>/versions/<stage>/v###` and writes the Run/Version. Rejected for now:
+  a headless OAuth+JSON-RPC MCP client inside the Submitter (biggest build, conflicts with the atomic
+  Submitter). See memory `magnific-runner-status`.
 - **Griptape**: does it implement the orchestration (ingest/log/pass), or does the
   Submitter stay plain Python and call Flamenco/DB directly? (Decide, then ADR.)
 - Manifest ↔ Mckenna DB **sync strategy**: write-through both, or manifest-first with
