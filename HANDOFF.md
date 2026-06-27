@@ -74,12 +74,21 @@ Andy's call: depth isn't special — it's one flavor of a whole family of contro
 - **Not built:** the write path that CALLS emit (`record_landed_take`, `promote` w/ p### allocation), the
   rest of the Submitter (ingest/expand/dispatch), and a persisted publish tag/role for chain matching.
 
-**Single next action (START HERE):** two viable paths — (a) **the Submitter write path** —
-`record_landed_take(conn, version_id, address)` (UPDATE address + emit) and `promote(conn, version_id,
-role=…)` (allocate next `p###` per `UNIQUE(shot_code,number)`, INSERT publish + emit); this gives real
-call-sites for the emit path and makes auto-publish reachable. OR (b) **stand up Postgres on Mckenna +
-apply 0001–0003**, then run the worker + `emit_demo` against a real row to see the loop fire on live infra.
-(b) needs Andy's hands (ssh/infra). Confirm which with Andy.
+### Then: built the Submitter write path (`submitter/writes.py`)
+- `record_landed_take(conn, version_id, address)` — UPDATE `versions.address` + `emit_version_recorded`,
+  one txn (ADR 0013); idempotent.
+- `promote(conn, version_id, path=…, role=…)` — per-shot advisory lock → allocate next `p###`
+  (`COALESCE(MAX(number),0)+1`, writer-allocated per ADR 0008) → INSERT publish → `emit_publish_recorded`;
+  returns `(publish_id, number)`. This is the call-site for BOTH a human gate and the Roustabout's
+  auto-publish. Verified py_compile/import (no live DB).
+
+**Single next action (START HERE):** the code spine is complete (Submitter emit+write path → outbox →
+Roustabout drain → handlers). The only thing left for a **real end-to-end proof is live infra**, which
+needs Andy's hands: **stand up Postgres on Mckenna, apply migrations `0001`–`0003`**, then in two terminals
+run `python -m roustabout.worker` and `python -m submitter.emit_demo version <id>` against a seeded
+run/version row — watch the barrier/eligibility/stub-handler logs fire. After that proves out: wire the
+first `CHAINS` entry (Hero → depth `control-pass`) and/or build the Submitter ingest/dispatch slice. The
+deferred **Branch 6** (real control-pass method Spells) remains available as an independent track.
 
 ## Session 6 (2026-06-26) — PIPELINE.md hardened to canon (do NOT re-litigate)
 A `grill-with-docs` pass pressure-tested `PIPELINE.md` against the UL + ADRs, fixed 7 issues, then
