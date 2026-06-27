@@ -78,7 +78,7 @@ flowchart TD
     BIND --> SUBMIT
     RUN["Run — type: seed-sweep | prompt-variation | xy-plot | refine<br/>authoring recipe: bindings (all inputs by role) + params + type-specific spec (ADR 0016) -> DB<br/>Submitter validates spec vs Template knobs, then expands -> Versions"]
     SUBMIT --> RUN
-    VERS["Versions v001..v0NN<br/>stage: render / upscale / comp<br/>frozen Submission Prompt (immutable) -> DB"]:::ai
+    VERS["Versions v001..v0NN — one per expanded spec cell<br/>(e.g. xy-plot lora×cfg = 2×4 = 8 takes)<br/>stage: render/upscale/comp · delta + frozen Submission Prompt (immutable) -> DB"]:::ai
     RUN --> VERS
 
     %% ---- Internal (supervisor) gate ----
@@ -94,10 +94,10 @@ flowchart TD
     %% ---- Comp fork (after the gen-AI video Publish) ----
     COMPQ{"Comp needed?"}
     PUB --> COMPQ
-    COMPIN["Comp inputs<br/>other Publishes + Assets + Imports (reference)"]
-    COMP["Comp Run — Nuke (Spell)<br/>type: comp · stage: comp · .nk in work/nuke/<br/>combine multiple inputs"]:::tool
+    COMPIN["Comp inputs<br/>other Publishes / Assets / Imports"]
+    COMP["Comp Run — Nuke (Spell)<br/>type: comp · stage: comp · spec: {script: .nk in work/nuke/}<br/>inputs bound by role · combine multiple inputs"]:::tool
     COMPQ -->|"yes"| COMP
-    COMPIN -->|"bound by Role"| COMP
+    COMPIN -->|"bound as Comp-Input / Source role"| COMP
     COMP --> COMPV["Comp Versions — versions/comp/ -> DB"]:::tool
     COMPV --> CSUP{"Supervisor review (comp)"}
     CSUP -->|"note -> comp refine"| COMP
@@ -112,7 +112,7 @@ flowchart TD
     CREVIEW{"Client approval"}
     DELY --> CREVIEW
     CREVIEW -->|"note"| NTRI
-    CREVIEW -->|"approved"| UPRES["Up-res Run — Magnific / Topaz<br/>type: upscale · stage: upscale -> DB"]:::tool
+    CREVIEW -->|"approved"| UPRES["Up-res Run — Magnific / Topaz<br/>type: upscale · stage: upscale<br/>Source=Publish binding · spec: {model, factor} -> DB"]:::tool
 
     %% ---- Up-res -> QC -> final master Delivery ----
     UPRES --> UVERS["Up-res Versions — versions/upscale/ -> DB"]:::tool
@@ -169,7 +169,7 @@ flowchart TD
     ATPL --> AAUTH
     ABRIEF --> AAUTH
     AAUTH --> ASUB["Submit (via Submitter)"]:::sys
-    ASUB --> ARUN["Run — INSERT run + bindings + authoring recipe -> DB"]
+    ASUB --> ARUN["Run — INSERT run + bindings + authoring recipe (params + type spec, ADR 0016) -> DB"]
     ARUN --> AVERS["Versions v### — frozen submission -> DB"]:::ai
     AVERS --> ASUP{"Supervisor review (Andy)<br/>INTERNAL only — NO client gate"}
     ASUP -->|"note -> refine Run"| ARUN

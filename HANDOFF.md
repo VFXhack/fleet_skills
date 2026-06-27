@@ -35,6 +35,14 @@ modeled the per-run-type spec; all landed in PIPELINE / CONTEXT / ADRs:
   normalized to Depth-Pass/depth-pass; **Lipsync-Dialog** added to View 1 + the Asset sub-flow + note-triage.
 - DDL (`0001_initial_schema.sql`) already had `address` + the `stage` CHECK; only comments were updated.
 
+**Single next action (START HERE):** grill the **Roustabout `FLOWS[run.type]`** (see §OPEN 5) — for each of
+the 7 types, what fires on `VersionRecorded`: proxy/thumbnail (always?), contact-sheet (for grid types
+xy-plot/seed-sweep?), auto-publish (depth-pass → its depth Publish; upscale?), chain next stage? Then pick
+the event mechanism (Postgres `LISTEN/NOTIFY` vs a queue). **Now unblocked** by ADR 0016 — the Roustabout
+wakes with a typed, validated `spec` and a known version count. Two tiny non-blocking cleanups noted this
+session: align `skills/depth-pass/SKILL.md`'s `depthXbw20` filename token with the `depthcrafter-bw20`
+variant Spell; and `job_code` is only unique per-client (so `shot_code` is per-Job unique, not global).
+
 ## DONE — Session 1 grilling is COMPLETE (do NOT re-litigate; all in CONTEXT.md + ADRs, committed)
 Every architectural branch is resolved. Committed in `7b0e7a6` (ADRs 0002–0010 + CONTEXT v0.3 + schemas)
 and a follow-up commit (depth-pass skill).
