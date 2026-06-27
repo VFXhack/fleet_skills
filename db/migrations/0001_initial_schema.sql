@@ -176,7 +176,9 @@ CREATE TABLE bindings (
     asset_id           uuid        NOT NULL REFERENCES assets(id) ON DELETE RESTRICT,
     pinned_publish_id  uuid        REFERENCES publishes(id) ON DELETE RESTRICT,  -- pinned content (internal)
     pinned_import_uri  text,                             -- pinned content (external), mirrors assets.import_uri
-    role               text        NOT NULL,             -- 'First-Frame' | 'Last-Frame' | 'Depth-Pass' | 'Style' | ...
+    role               text        NOT NULL,             -- 'First-Frame' | 'Last-Frame' | 'Depth-Pass' | 'Style' |
+                                                       --   'Plate/Driver' | 'Character-Sheet' | 'Lipsync-Dialog' |
+                                                       --   'Source' | 'Comp-Input' | ...  (open vocab; ADR 0016)
     created_at         timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX bindings_run_idx   ON bindings (run_id);

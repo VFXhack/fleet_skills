@@ -1,6 +1,6 @@
 # PIPELINE.md — Fleet Production Pipeline (canon flowchart)
 
-> Conforms to **CONTEXT.md** (ubiquitous language) and **ADR 0002–0015**. Ground-truth for Claude Code
+> Conforms to **CONTEXT.md** (ubiquitous language) and **ADR 0002–0016**. Ground-truth for Claude Code
 > implementation. Read alongside `CONTEXT.md` and `HANDOFF.md`.
 >
 > Spine: **Submit → Run → Version (`v###`) → Publish (`p###`) → Delivery (client `v#`)**. Numbers
@@ -76,7 +76,7 @@ flowchart TD
     %% ---- Submit -> Run -> Versions ----
     SUBMIT["Submit (via Submitter)"]:::sys
     BIND --> SUBMIT
-    RUN["Run — type: seed-sweep | prompt-variation | xy-plot | refine<br/>authoring recipe + Asset->Role bindings -> DB"]
+    RUN["Run — type: seed-sweep | prompt-variation | xy-plot | refine<br/>authoring recipe: bindings (all inputs by role) + params + type-specific spec (ADR 0016) -> DB<br/>Submitter validates spec vs Template knobs, then expands -> Versions"]
     SUBMIT --> RUN
     VERS["Versions v001..v0NN<br/>stage: render / upscale / comp<br/>frozen Submission Prompt (immutable) -> DB"]:::ai
     RUN --> VERS
@@ -284,7 +284,7 @@ flowchart LR
 | Moment | Writes to Postgres (Mckenna) | Manifest |
 |---|---|---|
 | **create-project** | `INSERT projects` → returns `db_project_id` (UUID) | written **once** (thin, one per Job); `db_project_id` stored |
-| **Submit** (a Run — Shot / Asset / **Comp** / **Up-res**) | `INSERT runs` (authoring recipe + `template_ref`; `type` ∈ seed-sweep / prompt-variation / xy-plot / refine / **comp** / **upscale** / **depth-pass**) + `INSERT bindings` (asset→role) + `INSERT versions` (per take, `stage` render/upscale/comp, `frozen_submission` JSONB, **`address` NULL** until the take lands) | untouched |
+| **Submit** (a Run — Shot / Asset / **Comp** / **Up-res**) | `INSERT runs` (authoring recipe: `template_ref`, `params`, type-specific **`spec`** (ADR 0016); `type` ∈ seed-sweep / prompt-variation / xy-plot / refine / **comp** / **upscale** / **depth-pass**) + `INSERT bindings` (all inputs asset→role, incl. `Source` / `Comp-Input`) + `INSERT versions` (Submitter **expands `spec`** → one per take; `stage` render/upscale/comp, `frozen_submission` JSONB, **`address` NULL** until the take lands) | untouched |
 | **Render completes** (Flamenco callback / sync Runner return) → **Submitter** | `UPDATE versions.address` (pointer back to the landed output) → **emit `VersionRecorded`** (ADR 0013) | untouched |
 | **`VersionRecorded`** → **Roustabout** | *(no version-row write)* renders proxy/thumbnail, logs, notifies, chains the next stage | untouched |
 | **Promote** (internal/supervisor gate — Shots, Assets, Comp, Up-res) | `INSERT publishes` (`p###`, `source_version_id`) | untouched |
@@ -306,7 +306,11 @@ or write the pointer itself (ADR 0013). **Notion is a one-way read view**, never
 
 The **Spellbook** is a `spellbook/` folder in this repo (`spells/`, `templates/`, `templates/blocks/`),
 distributed by Git (ADR 0009) — not Notion. A **Template** (verified prompt pattern, built from **Blocks**)
-turns a **Brief** into a **Submission Prompt**; its reference is recorded as `runs.template_ref`. The
+turns a **Brief** into a **Submission Prompt**; its reference is recorded as `runs.template_ref`. A
+Template also declares its **knobs** — the param keys a Run's `spec` may sweep (`cfg`,
+`lora.character.strength`, `seed`, …) and each knob's mapping to a Comfy node / API slot; the per-`run.type`
+**spec** contract (xy-plot axes = knob + explicit values with N=points; seed/prompt/comp/upscale/depth
+specs; all inputs via bindings) is **ADR 0016**. The
 **recipe** is stored in two parts (ADR 0007): the **authoring** recipe once on the **Run**, and the
 **frozen Submission Prompt + resolved params** per **Version** (immutable, self-reproducing — re-authoring
 a Template can never invalidate an existing Version). Feedback loop: a method is first written as a

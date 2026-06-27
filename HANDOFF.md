@@ -2,7 +2,7 @@
 
 You are continuing a **`grill-with-docs`** (domain-modeling) effort on the `fleet-skills` repo: the
 bounded context for Andy's CG → AI video pipeline. **Read `CONTEXT.md` (the glossary / source of
-truth) and `adr/0001`–`0015` before doing anything.** Then skim **`PIPELINE.md`** (the canon flowchart:
+truth) and `adr/0001`–`0016` before doing anything.** Then skim **`PIPELINE.md`** (the canon flowchart:
 main Shot flow, the supervisor-only Asset Production sub-flow, and the system/provenance view — it
 visualizes exactly what this handoff describes). Then read the memory `andy-working-style.md`.
 
@@ -16,8 +16,8 @@ visualizes exactly what this handoff describes). Then read the memory `andy-work
   follow 0001's format) for any non-obvious, hard-to-reverse decision. Never leave decisions only in chat.
 
 ## Session 6 (2026-06-26) — PIPELINE.md hardened to canon (do NOT re-litigate)
-A `grill-with-docs` pass pressure-tested `PIPELINE.md` against the UL + ADRs and fixed 7 issues; all
-landed in PIPELINE / CONTEXT / ADRs:
+A `grill-with-docs` pass pressure-tested `PIPELINE.md` against the UL + ADRs, fixed 7 issues, then
+modeled the per-run-type spec; all landed in PIPELINE / CONTEXT / ADRs:
 - **ADR 0013** — `VersionRecorded` fires only after a take's output lands; the **Submitter** writes
   `versions.address` on render completion (Flamenco callback / sync Runner return) and emits then. "Write
   the pointer back" moved **off** the Roustabout (now no-poll, no-pointer-back). Amends 0010/0012.
@@ -26,6 +26,10 @@ landed in PIPELINE / CONTEXT / ADRs:
   `versions.stage` (render/upscale/comp = storage bucket). Refines 0005/0011.
 - **ADR 0015** — Shot code includes the Episode token: `JOB_EP_SEQ_SHOT` (`AWA_EP01_SALEM_010`), because
   Sequence names recur across Episodes. Amends 0003; implies a rename in the legacy migration + runner scripts.
+- **ADR 0016** — per-`run.type` **spec** contract: each type declares its variables (xy-plot axes =
+  knob + explicit values, N=points; seed/prompt/comp/upscale/depth specs); all inputs via **bindings**
+  (new roles `Source`, `Comp-Input`); new `runs.spec` column (migration `0002_run_spec.sql`). The
+  Submitter validates `spec` against the Template's knobs, then expands it into Versions.
 - **UL sharpening (CONTEXT only):** Template "function" = workflow-type/**mode** (=`runs.mode`); Block
   "function" = prompt-**purpose**. Plate/Driver & Lipsync-Dialog are Publish XOR Import; `depthXbw`
   normalized to Depth-Pass/depth-pass; **Lipsync-Dialog** added to View 1 + the Asset sub-flow + note-triage.

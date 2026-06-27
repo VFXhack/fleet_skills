@@ -8,7 +8,9 @@
 > **Status:** v0.6 (2026-06-26) — Session 6 PIPELINE-hardening grill. Hardened `PIPELINE.md` to canon:
 > `VersionRecorded` fires after the take lands & the Submitter writes the address (ADR 0013); `run.type`
 > is one rich Roustabout dispatch enum, orthogonal to `stage` (ADR 0014); the Shot code gains the Episode
-> token `JOB_EP_SEQ_SHOT` (ADR 0015); Template "function" = mode, Block "function" = purpose. ADRs 0002–0015.
+> token `JOB_EP_SEQ_SHOT` (ADR 0015); Template "function" = mode, Block "function" = purpose. Also defined
+> the per-`run.type` **spec** contract — each type's variables, xy-plot axes (knob + explicit values,
+> N=points), inputs-via-bindings — and added `runs.spec` (ADR 0016). ADRs 0002–0016.
 
 ---
 
@@ -119,8 +121,10 @@ orchestration in the **DB**.
 
 ### Run
 One **Submit event** logged against a Shot — the unit the Submitter records to Mckenna's DB. Captures
-the **recipe** (flat params + the Asset→Role bindings), request-id, and cost, and produces **one or
-more Versions**. Has a **`type`** — the single dispatch key the **Roustabout** branches on (ADR 0014):
+the **recipe** — `bindings` (all inputs by Role), `params` (fixed base knobs), and a type-specific
+**`spec`** (the operation/variation; ADR 0016) — plus request-id and cost, and produces **one or
+more Versions** (the Submitter **expands** the `spec` into them). Has a **`type`** — the single dispatch
+key the **Roustabout** branches on (ADR 0014):
 `seed-sweep`, `prompt-variation`, `xy-plot`, `refine` (gen sweep-shapes) plus the operation types `comp`,
 `upscale`, and `depth-pass`. **Orthogonal to** a Version's **`stage`** (`render` / `upscale` / `comp`),
 which only records which `versions/<stage>/` bucket a take lands in (`comp`→comp, `upscale`→upscale, the
@@ -135,7 +139,8 @@ this. _Avoid_: using "Submit" for the **client** gate — that act is **Deliver*
 ### Recipe
 How a take was made, stored in **two parts by level** (ADR 0007):
 - **Authoring level — on the Run.** Shared, sweep-wide intent recorded once: the **Template**
-  reference, the `{asset → pinned Publish/Import, role}` bindings, model/tier/mode, flat params.
+  reference, the `{asset → pinned Publish/Import, role}` bindings (all inputs), model/tier/mode, fixed
+  **params**, and the type-specific **`spec`** (operation/variation — axes, seeds, variants, …; ADR 0016).
 - **Resolved level — on each Version.** A **frozen Submission Prompt + resolved params** — the exact
   payload actually sent — stored as an **immutable value object** (JSONB), sufficient on its own to
   reproduce the take even if the Template is later rewritten.
@@ -167,8 +172,9 @@ _Avoid_: using "Asset" for a CG **entity** (a modeled character/environment) —
 A **Role** is a property of the **binding** — the use of an Asset by a specific Shot/**Version** —
 **not** of the Asset itself: the same Asset can be **First-Frame** in one Shot and a plain reference
 in another. Values: **First-Frame**, **Last-Frame**, **Lipsync-Dialog**, **Character-Sheet**,
-**Depth-Pass**, **Style**, **Plate/Driver**, … Role is the **wiring key** — it tells the Submitter
-both how to reference the Asset in the prompt **and** which Comfy node / API slot to feed it into.
+**Depth-Pass**, **Style**, **Plate/Driver**, **Source** (the Publish an op like upscale/refine/comp
+consumes), **Comp-Input**, … Role is the **wiring key** — it tells the Submitter both how to reference
+the Asset in the prompt **and** which Comfy node / API slot to feed it into.
 Recorded as a binding `{asset → pinned Publish/Import, role}` on the **Version's recipe** — **not** a
 folder.
 _Avoid_: making Reference or Role a folder; bind by role in **data**.
