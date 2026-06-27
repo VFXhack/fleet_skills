@@ -2,6 +2,9 @@
 
 **Status:** Accepted
 **Date:** 2026-06-24
+**Amended by:** ADR 0015 — the Shot code includes the Episode token (`JOB_EP_SEQ_SHOT`,
+`AWA_EP01_SALEM_010`); the `JOB_SEQUENCE_SHOT` / `AWA_SALEM_010` / `<JOB_SEQ_SHOT>` examples below predate
+that resolution.
 
 ## Context
 The legacy layout (see `WBTV/AWA`) organized a Project **by task**: the Job root split into

@@ -11,6 +11,8 @@ stays on the Fleet drive and is referenced by each Project's `manifest.json`.
   - `create-project/` — scaffolds a new Project folder.
   - `depth-pass/` — generates a depth-pass reference for gen-AI video.
 - **`adr/`** — Architectural Decision Records (non-obvious, hard-to-reverse decisions).
+- **`PIPELINE.md`** — canon flowchart of the whole production pipeline (Brief → Delivery), the Asset
+  Production sub-flow, and the system/provenance view. Conforms to CONTEXT.md + the ADRs.
 - **`HANDOFF.md`** — context brief for a fresh Claude Code agent.
 - **`GRILL_KICKOFF_PROMPT.md`** — paste this to start a grill-with-docs session.
 - **`SETUP-GRILL-SESSION.md`** — step-by-step to get the grill session running.

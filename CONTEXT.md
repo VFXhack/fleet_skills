@@ -5,8 +5,10 @@
 > It is the source of truth for what words *mean*. Keep it tight. Sharpen terms here
 > via `grill-with-docs` sessions; record non-obvious decisions as ADRs in `/adr`.
 >
-> **Status:** v0.4 (2026-06-25) — Session 2 implementation. Postgres core live on Mckenna + Huxley
-> canonical store wired; `create-project` built (`fleet` package). ADRs 0002–0011.
+> **Status:** v0.6 (2026-06-26) — Session 6 PIPELINE-hardening grill. Hardened `PIPELINE.md` to canon:
+> `VersionRecorded` fires after the take lands & the Submitter writes the address (ADR 0013); `run.type`
+> is one rich Roustabout dispatch enum, orthogonal to `stage` (ADR 0014); the Shot code gains the Episode
+> token `JOB_EP_SEQ_SHOT` (ADR 0015); Template "function" = mode, Block "function" = purpose. ADRs 0002–0015.
 
 ---
 
@@ -42,17 +44,19 @@ authoring. A Brief becomes a Submission Prompt, usually via a **Template**.
 
 ### Template
 A **verified, reusable prompt pattern** that turns a Brief into a **Submission Prompt** for a specific
-**model + function**. The core craft of the pipeline; lives in the **Spellbook**, project-agnostic.
-Built from **Blocks**. *Verification is the goal* — today's prompt patterns are largely **unvetted**;
-the Template Library is a capability **to build**, not a current asset.
+**model + workflow-type** — a Template's "function" = the generation **mode** (`t2v`/`i2v`/`r2v`, matching
+`runs.mode`). The core craft of the pipeline; lives in the **Spellbook**, project-agnostic. Built from
+**Blocks** (each keyed by **prompt-purpose** — see *Block*). Spellbook index: Templates by **model × mode**.
+*Verification is the goal* — today's prompt patterns are largely **unvetted**; the Template Library is a
+capability **to build**, not a current asset.
 
 ### Block
-A **model- and function-specific unit of a Template** — a reusable prompt fragment whose wording is
-settled by **experimentation + verification**, then composed into Templates. Tested candidates of a
-Block are **variants**.
+A **model- and purpose-specific unit of a Template** — a reusable prompt fragment keyed by
+**prompt-purpose** (camera / style / lighting / motion / subject …), whose wording is settled by
+**experimentation + verification**, then composed into Templates. (A Block's "function" is its
+**purpose**; a Template's "function" is its **workflow-type/mode** — the two levels key on different
+axes.) Spellbook index: Blocks by **model × purpose**. Tested candidates of a Block are **variants**.
 _Avoid_: **Version** for a Block's candidates — "Version" is reserved for a Run's takes.
-*(To confirm: what "function" keys on — workflow type `t2v`/`i2v`/`r2v`, or a prompt purpose like
-camera/style/lighting.)*
 
 ### Project anatomy (Client → Job → Episode → Sequence → Shot)
 Production work nests in five fixed levels. A **Project = a Job** — the Job is the unit that
@@ -65,8 +69,9 @@ gets a folder root, a `manifest.json`, and a `CONTEXT.md`, and is created via `c
   single-episode Jobs (one-offs get one Episode).
 - **Sequence** — a named group of Shots within an Episode (e.g. `SALEM`, `JUGDEAD`, `TITLE`).
 - **Shot** — the atomic unit of production: one continuous gen-AI video segment, the thing a
-  **Run** acts on. Coded `JOB_SEQUENCE_SHOT` (e.g. `AWA_SALEM_010`). *(Whether the Episode
-  appears in the Shot code is TBD.)*
+  **Run** acts on. Coded `JOB_EP_SEQ_SHOT` (e.g. `AWA_EP01_SALEM_010`) — the Episode token is
+  **included** because Sequence names recur across Episodes, and the code self-locates to its
+  `<EP>/<SEQ>/<SHOT>/` folder (ADR 0015).
 
 _Avoid_: using "project" for a shot or a deliverable — a Project is the **Job**.
 _Avoid_: **Show** (use *Episode*), **Scene** (use *Sequence* — "scene" carries narrative ambiguity).
@@ -75,26 +80,52 @@ folder but is **not** part of a Shot's identity (it's an attribute/parent, not a
 
 ### Submitter
 The connective tissue of the pipeline and an **atomic tool** (ADR 0010): **ingests** a brief/recipe →
-**writes** the Run/Version to the **Postgres provenance store** on **Mckenna** → **dispatches** heavy
-render work to **Flamenco** → **emits `VersionRecorded`**. It does **not** orchestrate downstream work
-(proxy, next steps) — that is **Griptape**'s job, fired by the event.
-_Avoid_: putting next-step / orchestration logic in the Submitter (or in DB triggers).
+**writes** the Run/Version to the **Postgres provenance store** on **Mckenna** (`versions.address` NULL
+at this point) → **dispatches** heavy render work to **Flamenco** (or a **Runner**) → **on render
+completion** writes the take's output **`address`** back and **emits `VersionRecorded`** — so the event
+always means *a finished, addressable take exists*, never *a render was requested* (ADR 0013). It does
+**not** orchestrate downstream work (proxy, next steps) — that is the **Roustabout**'s job, fired by the
+event.
+_Avoid_: putting next-step / orchestration logic in the Submitter (or in DB triggers); emitting
+`VersionRecorded` before the output has landed.
 
-### Griptape
-The **orchestration layer — the conductor** (ADR 0010). A separate piece from the **Submitter**: it
-**subscribes to events** (starting with **`VersionRecorded`**), **sequences Skills and Spells** into
-flows, renders the **proxy/thumbnail**, **writes the pointer back**, and drives **next steps** (publish
-prep, notifications, stage chaining). It **calls** the Submitter as one instrument; it is not the
-Submitter. The seam between them is the **event**, never an in-process call or a DB trigger. The future
-**Hermes** agent (earmarked for **Ramdass**) drives Griptape flows once the structure exists. AYON's
-event-driven **Workflows** is a *reference design* for this layer, not an adopted system (ADR 0008).
-_Avoid_: collapsing Griptape into the Submitter; putting orchestration in the **DB**.
+### Orchestration (the Circus: Ringmaster over Roustabout)
+The post-`VersionRecorded` side of the system, split into **two named floors** (ADR 0012, amending 0010).
+The metaphor is **the Circus**: a **Ringmaster** directs the show; **Roustabouts** rig between acts. The
+seam to the **Submitter** is always the **event**, never an in-process call or a DB trigger.
+
+### Roustabout
+The **deterministic floor of orchestration — the crew that rigs between acts (now).** Subscribes to
+events (starting with **`VersionRecorded`**), **branches by `run.type` / Role / stage**, and runs a
+**pre-wired flow**: renders the **proxy/thumbnail**, logs, notifies, and chains next stages. (The take's
+output **`address`** is already written by the **Submitter** at render completion — ADR 0013 — so the
+Roustabout reacts to a guaranteed-existing artifact and never writes the pointer or polls.) **Rule-based,
+no LLM, no judgment** — if a step needs to *judge*, that logic belongs **up** in the **Ringmaster**. It **calls** the Submitter as one instrument; it is not the Submitter.
+Filled today by a **thin Python worker** (Postgres `LISTEN/NOTIFY` + a `FLOWS[run.type]` dispatch table);
+it **graduates** to a real workflow engine (Prefect / Temporal / Windmill / …) only when hand-rolled
+retries/observability earn it — the **Spell → Skill** rule (ADR 0012).
+_Avoid_: collapsing the Roustabout into the Submitter; naming this role after a tool ("Griptape" is a
+candidate **tool**, not this role); putting orchestration in the **DB**.
+
+### Ringmaster
+The **agent floor of orchestration — the show-director (later).** Looks at outputs and **decides**
+(quality, which take to promote, what to do next), drives multi-step flows, and talks to Andy. The role
+the future **Hermes** agent (earmarked for **Ramdass**) plays once the structure exists. Sits **above**
+the Roustabout and is **deferred** — only the Roustabout exists today. Tooling is **TBD**: **Griptape**
+(an LLM/agent framework) or the **Claude Agent SDK** are the candidates (ADR 0012). AYON's event-driven
+**Workflows** is a *reference design* for this side, not an adopted system (ADR 0008).
+_Avoid_: pushing Ringmaster (judging) logic down into the Roustabout or the Submitter; putting
+orchestration in the **DB**.
 
 ### Run
 One **Submit event** logged against a Shot — the unit the Submitter records to Mckenna's DB. Captures
 the **recipe** (flat params + the Asset→Role bindings), request-id, and cost, and produces **one or
-more Versions**. Has a **`type`**: `seed-sweep`, `prompt-variation`, `xy-plot`, `refine`, … A Run also
-logs non-gen-AI Skill executions (e.g. a `depth-pass` Run produces a depth **Publish**).
+more Versions**. Has a **`type`** — the single dispatch key the **Roustabout** branches on (ADR 0014):
+`seed-sweep`, `prompt-variation`, `xy-plot`, `refine` (gen sweep-shapes) plus the operation types `comp`,
+`upscale`, and `depth-pass`. **Orthogonal to** a Version's **`stage`** (`render` / `upscale` / `comp`),
+which only records which `versions/<stage>/` bucket a take lands in (`comp`→comp, `upscale`→upscale, the
+rest→render). A Run also logs non-gen-AI Skill executions (e.g. a `depth-pass` Run produces a depth
+**Publish**).
 _Avoid_: **Cast** (flavor — the verb is **Submit**).
 
 ### Submit
@@ -213,7 +244,8 @@ source Version; Import does not) is what keeps provenance honest.
 
 ### Seed Sweep
 A **Run type**: N **Versions** across seeds (or params) for variation. A set of **Versions**, never of
-Publishes. Other Run types: `prompt-variation`, `xy-plot`, `refine`.
+Publishes. Other gen Run types: `prompt-variation`, `xy-plot`, `refine`; operation types: `comp`,
+`upscale`, `depth-pass` (full enum in ADR 0014).
 
 ### Depth Pass
 A depth-map reference generated from a plate/frame, used to guide gen-AI video.
@@ -233,7 +265,8 @@ each machine's *role*. Current machines:
   Submitter writes Runs to, and the Flamenco controller that dispatches jobs. **Does not
   render.** Shares only a small `tools` directory.
 - **Ramdass** — Mac mini (macOS), currently **idle**; earmarked as a future **Hermes**
-  agent that will drive these workflows once the structure is built. Not yet wired in.
+  agent — the one that plays the **Ringmaster** role — that will drive these flows once the
+  structure is built. Not yet wired in.
 
 ### Flamenco
 The render farm manager. Its **controller** runs on **Mckenna** and **dispatches** Blender
@@ -255,7 +288,7 @@ is a `projects` row UUID; the **`projects` table is the project index**. Each ma
 **Postgres DSN in Fleet config** (same pattern as `base_path`). **Notion is a one-way read view, never the
 source of truth**; the legacy "Video Generations log" migrates in.
 _Avoid_: treating Notion as truth; putting orchestration (proxy / next-step logic) in the DB — that is
-Griptape's job (Branch 5), fired by a `VersionRecorded` event.
+the **Roustabout**'s job (Branch 5), fired by a `VersionRecorded` event.
 
 ### base_path
 A Project's (Job's) root location, stored in the **Manifest** in **platform-neutral** form
@@ -290,7 +323,7 @@ trade-offs downstream.
 - **Skills** live in Git (this repo, `skills/`). **Spells** + **Templates** live in the **Spellbook**
   (`spellbook/` in this same repo — ADR 0009); a **Spell graduates** by moving into `skills/`.
 - The **Submitter** writes **Runs/Versions** to the **Postgres provenance store on Mckenna** and
-  dispatches renders to **Flamenco**. Writing a Version emits **`VersionRecorded`**; **Griptape**
+  dispatches renders to **Flamenco**. Writing a Version emits **`VersionRecorded`**; the **Roustabout**
   (Branch 5) renders the proxy and writes the pointer back — **orchestration never lives in the DB**.
 - One **Submit** → a **Run** → one or more **Versions**; promoting a Version (internal gate) makes a
   **Publish**; **Deliver**ing a Publish (client gate) makes a **Delivery**. Each gate numbers
@@ -303,8 +336,9 @@ trade-offs downstream.
 ---
 
 ## Open questions (to resolve via grilling / ADRs)
-- **Griptape** — a **separate orchestration layer** (conductor) above an **atomic Submitter**, joined at
-  the `VersionRecorded` event; Hermes (Ramdass) drives it later. ✅ (→ ADR 0010)
+- **Orchestration** — split into **two floors**: **Ringmaster** (agent, later; Hermes plays it) over
+  **Roustabout** (deterministic worker, now — a thin Python worker), joined to the Submitter at
+  `VersionRecorded`; **Griptape demoted** to a Ringmaster-floor candidate. ✅ (→ ADR 0010, amended by 0012)
 - **Manifest schema** — thin map header, integer `manifest_version`, provenance in DB. ✅ (→ ADR 0006)
 - Where does the **Spellbook** physically live once migrated — a folder in this repo,
   a separate repo, or stays in Notion with a sync? (→ decide early)
@@ -314,14 +348,16 @@ trade-offs downstream.
 - Deferred config: Huxley `io/common` prefix (`/nvme1/comfyui/io_common`) + Windows share name
   (`io_common`) — **resolved** (Session 2). Still open: the per-machine **fleet repo clone path**
   (logical root resolved per workstation, like `base_path`).
-- Whether the **Episode** token appears in the Shot code (`AWA_SALEM_010` vs `AWA_EP01_SALEM_010`) — **to confirm**.
+- Whether the **Episode** token appears in the Shot code — **resolved:** included (`JOB_EP_SEQ_SHOT`,
+  `AWA_EP01_SALEM_010`) because Sequence names recur across Episodes. ✅ (→ ADR 0015)
 - **Reconciled vs. prior UL handoff:** spine terms (Episode/Sequence), Generation/Publish split,
   Asset-over-Reference + Role-as-metadata. ✅ (→ ADR 0004)
 - **Artifact & versioning model** — Run/Submit, Version (←Generation), Publish `p###`,
   Deliver/Delivery (client gate), Import, Lineage; gated namespaces + pointer provenance. ✅ (→ ADR 0005)
 - **Spellbook holds Spells (recipes) + Templates (verified prompt patterns of Blocks)**; Brief →
   Template → Submission Prompt. ✅ (extends ADR 0001) — Template vetting is aspirational (unvetted today).
-- Micro to-confirm: term for unvetted Block candidates (proposed **variant**); what "function" keys on.
+- Micro to-confirm: term for unvetted Block candidates = **variant** ✅; "function" = Template→**mode**
+  (`t2v`/`i2v`/`r2v`), Block→**purpose** (camera/style/lighting/motion) ✅.
 - **Branch 4 — Provenance DB** — own thin **Postgres on Mckenna**; project index = `projects` table;
   `db_project_id` = row UUID; Notion → one-way view. ✅ (→ ADR 0008)
 - **Recipe storage** — hybrid: authoring recipe on the Run + frozen Submission Prompt per Version. ✅ (→ ADR 0007)
@@ -329,7 +365,8 @@ trade-offs downstream.
   (fine in Notion keyed off Delivery IDs until then). Parked.
 - **Branch 3 — Spellbook location** — a `spellbook/` folder in **this repo**, distributed by the Git
   remote (clone + pull per machine); Notion demoted. ✅ (→ ADR 0009)
-- **Branch 5 — Griptape** — separate conductor above an atomic Submitter, joined at `VersionRecorded`. ✅ (→ ADR 0010)
+- **Branch 5 — Orchestration** — two floors (**Ringmaster** agent / **Roustabout** worker); Roustabout =
+  thin Python worker now (graduate-when-earned); Griptape reserved as a Ringmaster candidate. ✅ (→ ADR 0010, 0012)
 - **Session 2 reconciliation (implementation):** ADR-0003 is **confirmed the target** — the live
   hand-made projects (e.g. `WBTV/AWA`) are **non-conforming legacy** (task-centric folders like
   `AI_Frames/`,`AI_Renders/`; flat `v##`-in-filename takes; Notion log), to be **migrated, not

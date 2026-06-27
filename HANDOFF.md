@@ -2,7 +2,9 @@
 
 You are continuing a **`grill-with-docs`** (domain-modeling) effort on the `fleet-skills` repo: the
 bounded context for Andy's CG → AI video pipeline. **Read `CONTEXT.md` (the glossary / source of
-truth) and `adr/0001`–`0010` before doing anything.** Then read the memory `andy-working-style.md`.
+truth) and `adr/0001`–`0015` before doing anything.** Then skim **`PIPELINE.md`** (the canon flowchart:
+main Shot flow, the supervisor-only Asset Production sub-flow, and the system/provenance view — it
+visualizes exactly what this handoff describes). Then read the memory `andy-working-style.md`.
 
 ## Who / how to behave
 - **Andy** — solo CG→AI operator, ADHD, learning to code. **One question at a time**, concrete next
@@ -12,6 +14,22 @@ truth) and `adr/0001`–`0010` before doing anything.** Then read the memory `an
   will override his own prior "LOCKED" calls; surface the trade-off first).
 - **As decisions land: update `CONTEXT.md` inline and write an ADR** in `/adr` (number sequentially,
   follow 0001's format) for any non-obvious, hard-to-reverse decision. Never leave decisions only in chat.
+
+## Session 6 (2026-06-26) — PIPELINE.md hardened to canon (do NOT re-litigate)
+A `grill-with-docs` pass pressure-tested `PIPELINE.md` against the UL + ADRs and fixed 7 issues; all
+landed in PIPELINE / CONTEXT / ADRs:
+- **ADR 0013** — `VersionRecorded` fires only after a take's output lands; the **Submitter** writes
+  `versions.address` on render completion (Flamenco callback / sync Runner return) and emits then. "Write
+  the pointer back" moved **off** the Roustabout (now no-poll, no-pointer-back). Amends 0010/0012.
+- **ADR 0014** — `run.type` is ONE rich enum and the single Roustabout dispatch key
+  {seed-sweep, prompt-variation, xy-plot, refine, comp, upscale, depth-pass}, orthogonal to
+  `versions.stage` (render/upscale/comp = storage bucket). Refines 0005/0011.
+- **ADR 0015** — Shot code includes the Episode token: `JOB_EP_SEQ_SHOT` (`AWA_EP01_SALEM_010`), because
+  Sequence names recur across Episodes. Amends 0003; implies a rename in the legacy migration + runner scripts.
+- **UL sharpening (CONTEXT only):** Template "function" = workflow-type/**mode** (=`runs.mode`); Block
+  "function" = prompt-**purpose**. Plate/Driver & Lipsync-Dialog are Publish XOR Import; `depthXbw`
+  normalized to Depth-Pass/depth-pass; **Lipsync-Dialog** added to View 1 + the Asset sub-flow + note-triage.
+- DDL (`0001_initial_schema.sql`) already had `address` + the `stage` CHECK; only comments were updated.
 
 ## DONE — Session 1 grilling is COMPLETE (do NOT re-litigate; all in CONTEXT.md + ADRs, committed)
 Every architectural branch is resolved. Committed in `7b0e7a6` (ADRs 0002–0010 + CONTEXT v0.3 + schemas)
@@ -27,8 +45,10 @@ and a follow-up commit (depth-pass skill).
   `db_project_id` = row UUID; DSN in Fleet config; Notion → one-way view; Video Generations log migrates in. (ADR 0008)
 - **Spellbook = `spellbook/` folder in THIS repo** (beside `skills/`); distributed by the Git remote
   (`github.com/VFXhack/fleet_skills`) via clone + `git pull`; Notion demoted. (ADR 0009)
-- **Griptape = separate orchestration conductor** above an atomic Submitter, joined at the
-  `VersionRecorded` event; Hermes (Ramdass) drives it later. (ADR 0010)
+- **Orchestration = two floors** (ADR 0010, amended by **0012**): **Ringmaster** (agent, later; Hermes
+  plays it) over **Roustabout** (deterministic worker, now — a thin Python worker), joined to the atomic
+  Submitter at the `VersionRecorded` event. **Griptape demoted** from "the conductor" to a Ringmaster-floor
+  candidate (vs the Claude Agent SDK); it is **not** the Roustabout.
 - **depth-pass Skill** rewritten: hardened **spine** (Comfy on Huxley → depth **Publish** in
   `<Shot>/publishes/`, Run → Postgres via Submitter); concrete recipes are **variant Spells**
   (`depthcrafter-anyline-combo`, `depthcrafter-bw20`; `seedance-color2depth` deprecated).
@@ -44,7 +64,10 @@ The domain model is settled; the remaining work is building it. Priority order:
    `spellbook/`; pin the **depth-pass variant Spell** params (DepthCrafter `s5g2p0w110`, the ffmpeg
    B&W comp @20%, Anyline settings) while doing it.
 4. **Notion**: one-way DB→Notion sync + a Notion→Postgres migration of the Video Generations log.
-5. **Griptape conductor**: pick the `VersionRecorded` event mechanism (Postgres LISTEN/NOTIFY vs queue).
+5. **Roustabout (START HERE next session).** Grill *down* into the deterministic floor: define the
+   `FLOWS[run.type]` dispatch table — exactly what fires for `seed-sweep` vs `refine` vs `depth-pass`
+   (proxy? contact-sheet? auto-publish? chain a stage?). Then pick the `VersionRecorded` event mechanism
+   (Postgres `LISTEN/NOTIFY` vs queue). Ringmaster tool choice (Griptape vs Claude SDK) can wait.
 
 ## RECONCILIATION GAP discovered this session (important for `create-project`)
 The **real on-disk projects do NOT match ADR 0003.** Live layout (e.g. `W:\Projects\WBTV\AWA\`,
@@ -57,8 +80,9 @@ ones. Surface this to Andy before building `create-project`. (`W:` is the per-ma
 project store; comfy-runner toolchain lives at `W:\Projects\ComfyUI_Tools`.)
 
 ## Micro to-confirms (cheap, fold in when relevant)
-- Episode token in the Shot code? (`AWA_SALEM_010` vs `AWA_EP01_SALEM_010`)
-- Term for **unvetted Block candidates** (proposed: *variant*); what a Template's **"function"** keys on.
+- ~~Episode token in the Shot code~~ — **resolved:** included, `JOB_EP_SEQ_SHOT` (ADR 0015).
+- ~~Block-candidate term / Template "function"~~ — **resolved:** candidate = *variant*; Template fn = mode,
+  Block fn = purpose (CONTEXT updated).
 - Document `manifest.db_project_id` as a **UUID** in `schemas/manifest.schema.json` (non-structural).
 - Deferred config: Huxley `io/common` absolute prefix; Windows share name; per-machine fleet repo clone path.
 

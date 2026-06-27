@@ -56,7 +56,8 @@ CREATE TABLE runs (
     id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id    uuid        NOT NULL REFERENCES projects(id) ON DELETE RESTRICT,
     shot_code     text        NOT NULL,                -- 'AWA_SALEM_010' (walked, not an FK)
-    type          text        NOT NULL,                -- 'seed-sweep' | 'prompt-variation' | 'xy-plot' | 'refine' | ...
+    type          text        NOT NULL,                -- ADR 0014 enum (single Roustabout dispatch key):
+                                                       --   seed-sweep | prompt-variation | xy-plot | refine | comp | upscale | depth-pass
     -- authoring-level recipe (shared; ADR 0007):
     template_ref  text,                                -- Spellbook Template reference (may be null for non-gen Skill runs)
     model         text,                                -- model id / family
@@ -86,7 +87,8 @@ CREATE TABLE versions (
                        CHECK (stage IN ('render','upscale','comp')),   -- ADR 0003 versions/<stage>/
     delta              jsonb       NOT NULL DEFAULT '{}'::jsonb,        -- the swept value (e.g. {"seed": 777})
     frozen_submission  jsonb       NOT NULL,           -- exact payload sent; immutable (ADR 0007)
-    address            text,                           -- ephemeral model output URL/path (may rot)
+    address            text,                           -- ephemeral model output URL/path (may rot); NULL until the
+                                                       -- render lands, then written by the Submitter -> VersionRecorded (ADR 0013)
     created_at         timestamptz NOT NULL DEFAULT now(),
     UNIQUE (shot_code, number)
 );

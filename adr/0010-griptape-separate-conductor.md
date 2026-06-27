@@ -1,6 +1,12 @@
 # ADR 0010 — Griptape is a separate orchestration layer (conductor), not part of the Submitter
 
-**Status:** Accepted
+**Status:** Accepted — **amended by ADR 0012** (the single "Griptape conductor" is split into two floors,
+**Ringmaster** (agent) over **Roustabout** (deterministic worker); Griptape is demoted from "the conductor"
+to a *candidate tool for the Ringmaster floor*, and is **not** the Roustabout. The seam decision below — atomic
+Submitter, joined at `VersionRecorded`, no orchestration in the Submitter or DB — **still stands**.)
+**Also amended by ADR 0013** — *who writes the output address, and when the event fires*: the Submitter
+writes `versions.address` on render completion and emits `VersionRecorded` **then** (not at dispatch);
+"write the pointer back" moves **off** the Roustabout.
 **Date:** 2026-06-25
 
 ## Context

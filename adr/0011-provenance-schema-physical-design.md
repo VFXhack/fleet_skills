@@ -2,6 +2,10 @@
 
 **Status:** Accepted
 **Date:** 2026-06-25
+**Refined by:** ADR 0013 (`versions.address` — already in this DDL, nullable — is written by the Submitter
+at render-completion, *then* `VersionRecorded` fires); ADR 0014 (`runs.type` value set fixed to
+`seed-sweep / prompt-variation / xy-plot / refine / comp / upscale / depth-pass`, orthogonal to
+`versions.stage` and used as the single Roustabout dispatch key).
 
 ## Context
 ADR 0008 decided *what* the provenance core is (own thin Postgres on Mckenna, 7 UL tables) and
