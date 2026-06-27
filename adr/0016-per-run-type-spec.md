@@ -1,8 +1,10 @@
 # ADR 0016 — Per-run-type spec: each `run.type` declares the variables it needs; the Submitter expands it
 
-**Status:** Accepted
+**Status:** Accepted — *`depth-pass` row generalized to `control-pass` by ADR 0017*
 **Date:** 2026-06-26
 **Builds on:** ADR 0005 (run types), 0007 (authoring vs resolved recipe), 0011 (schema), 0014 (run.type enum)
+**Amended by:** ADR 0017 — the `depth-pass` spec row below generalizes to **`control-pass`**: same
+`{method:<variant spell>, params}` shape, now covering depth/canny/openpose/matte (flavor = the Spell).
 
 ## Context
 ADR 0014 fixed `run.type` as the single dispatch enum, but nothing defined *what variables each type
@@ -38,7 +40,7 @@ each knob's key→Comfy-node/API-slot mapping, mirroring how `role` maps an asse
 | refine | creative assets + Source=Publish | `{changes:{knob:val,…}}` | 1–N |
 | comp | Comp-Input(s)=Publish/Import | `{script:<.nk ref in work/nuke/>}` | 1–N |
 | upscale | Source=Publish | `{model, params:{factor,…}}` | 1–N |
-| depth-pass | Source=Publish/Import (plate/frame) | `{method:<variant spell>, params:{…}}` | 1 → depth Publish |
+| control-pass | Source=Publish/Import (plate/frame) | `{method:<variant spell>, params:{…}}` | 1 → control Publish (depth/canny/openpose/matte; bound in a per-kind Role) — ADR 0017 |
 
 **Conventions:**
 - **Sweep `values` are stored EXPLICIT.** `{from,to,steps,scale}` is *input sugar* the Submitter expands

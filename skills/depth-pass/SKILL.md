@@ -10,9 +10,11 @@ description: >
 
 # depth-pass
 
-> **Status:** v0.2 — realigned to ADRs 0003/0005/0008 (2026-06-25). Encodes the common
-> **spine** only; the concrete depth recipe is a **variant Spell** (see *Variants*). Variant
-> internals (exact params, ffmpeg comp, Anyline settings) get pinned when the Spells migrate
+> **Status:** v0.3 — realigned to ADRs 0003/0005/0008 (2026-06-25); generalized under `control-pass`
+> (ADR 0017, 2026-06-26). This Skill is the **depth flavor** of the `control-pass` run.type — its
+> siblings (canny, openpose, matte) are Spells of the same type, not separate Skills. Encodes the common
+> depth **spine** only; the concrete depth recipe is a **variant Spell** / `spec.method` (see *Variants*).
+> Variant internals (exact params, ffmpeg comp, Anyline settings) get pinned when the Spells migrate
 > from Notion / the project `CLAUDE.md` recipes into `spellbook/spells/` (ADR 0009).
 
 ## When to use
@@ -36,12 +38,15 @@ Regardless of variant, every depth pass:
    video** (temporal — over the whole clip; 24fps to reduce frame-to-frame jumping).
 3. Emits the result as a **depth Publish** (`p###`) in `<Shot>/publishes/`, never an ephemeral Version
    — because downstream (the 1080 sweep) **references only Publishes**.
-4. Is logged as a **Run** of type `depth-pass` to the Postgres provenance store (ADR 0008), via the
-   **Submitter** — a non-gen-AI Skill execution that produces a Publish (per CONTEXT *Run*).
+4. Is logged as a **Run** of type `control-pass` (with `spec.method` = the depth variant Spell, e.g.
+   `depthcrafter-bw20`) to the Postgres provenance store (ADR 0008/0017), via the **Submitter** — a
+   non-gen-AI Skill execution that produces a Publish (per CONTEXT *Run* / *Control Pass*).
 
 ## Variants (Spells — not hardened here)
-The concrete recipe is a swappable Spell. Known live variants (canonical recipes currently in the
-project `CLAUDE.md` files / Notion, pending migration to `spellbook/spells/`):
+The concrete recipe is a swappable Spell, selected per Run as **`spec.method`** (ADR 0016/0017). These are
+the **depth** flavors of `control-pass`; canny/openpose/matte are sibling `control-pass` Spells, not part of
+this Skill. Known live depth variants (canonical recipes currently in the project `CLAUDE.md` files /
+Notion, pending migration to `spellbook/spells/`):
 - **`depthcrafter-anyline-combo`** — **DepthCrafter (FG depth) + Anyline (BG line-art)** → combined
   depth/line mp4. The documented "Current Best Practice" (Centenario `CLAUDE.md`); better BG structure
   than pure depth.
@@ -55,8 +60,9 @@ project `CLAUDE.md` files / Notion, pending migration to `spellbook/spells/`):
 3. Run the variant's ComfyUI graph **on Huxley** to produce the depth/structure reference video.
 4. Promote the result to a **depth Publish** (`p###`) in `<Shot>/publishes/`, with a pointer back to
    its source plate.
-5. Log the **Run** (`type: depth-pass`, inputs, variant, params, output Publish) to **Postgres via the
-   Submitter**; the Submitter emits `VersionRecorded` for Griptape to pick up (proxy etc.).
+5. Log the **Run** (`type: control-pass`, `spec.method` = depth variant, inputs, params, output Publish) to
+   **Postgres via the Submitter**; the Submitter emits `VersionRecorded` for the **Roustabout** to pick up
+   (proxy etc. — ADR 0012).
 6. Return the depth **Publish** pointer (`p###`).
 
 ## Outputs

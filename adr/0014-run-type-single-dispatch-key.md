@@ -1,8 +1,11 @@
 # ADR 0014 — `run.type` is one rich dispatch-key enum, orthogonal to `versions.stage`
 
-**Status:** Accepted
+**Status:** Accepted — *enum amended by ADR 0017 (`depth-pass` → `control-pass`)*
 **Date:** 2026-06-26
 **Refines:** ADR 0005, ADR 0011 (the open-ended `runs.type` enum); feeds ADR 0012 (Roustabout dispatch)
+**Amended by:** ADR 0017 — the `depth-pass` value generalizes to **`control-pass`** (depth/canny/openpose/
+matte are one family, flavored by Spell via `spec.method`). Read the enum below as carrying `control-pass`
+in place of `depth-pass`.
 
 ## Context
 ADRs 0005/0011 fixed `runs.type ∈ {seed-sweep, prompt-variation, xy-plot, refine, …}` and a separate

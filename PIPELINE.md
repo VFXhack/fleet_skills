@@ -1,6 +1,6 @@
 # PIPELINE.md — Fleet Production Pipeline (canon flowchart)
 
-> Conforms to **CONTEXT.md** (ubiquitous language) and **ADR 0002–0016**. Ground-truth for Claude Code
+> Conforms to **CONTEXT.md** (ubiquitous language) and **ADR 0002–0019**. Ground-truth for Claude Code
 > implementation. Read alongside `CONTEXT.md` and `HANDOFF.md`.
 >
 > Spine: **Submit → Run → Version (`v###`) → Publish (`p###`) → Delivery (client `v#`)**. Numbers
@@ -56,7 +56,7 @@ flowchart TD
     PLATE["Plate / Driver<br/>Import (client plate · stock · scan) — binds directly<br/>OR a self-gen driver as a Publish (normal Run→Version→Publish loop)"]:::imp
     SHEET["Character-Sheet<br/>Asset Production sub-flow (Spell)"]:::ai
     FRAME["First / Last-Frame<br/>Asset Production sub-flow (Spell)"]:::ai
-    DEPTH["Depth-Pass<br/>Asset Production sub-flow (depth-pass Skill + variant Spells)"]:::skill
+    DEPTH["Control-Pass (depth / canny / openpose / matte)<br/>Asset Production sub-flow · run.type control-pass · flavor = Spell (spec.method)<br/>depth flavor = the hardened depth-pass Skill (ADR 0017)"]:::skill
     LIPSYNC["Lipsync-Dialog<br/>Asset Production sub-flow (Spell) — AI-gen VO/performance (Publish)<br/>OR sourced VO as an Import — binds directly"]:::ai
     BRIEF -->|"required inputs"| PLATE
     BRIEF -->|"required inputs"| SHEET
@@ -70,7 +70,7 @@ flowchart TD
     PLATE -->|"Plate Role (Import or Publish)"| BIND
     SHEET -->|"Character-Sheet Role (Publish)"| BIND
     FRAME -->|"First / Last-Frame Role (Publish)"| BIND
-    DEPTH -->|"Depth-Pass Role (Publish)"| BIND
+    DEPTH -->|"per-kind control Role: Depth-Pass / Canny / OpenPose / Matte (Publish)"| BIND
     LIPSYNC -->|"Lipsync-Dialog Role (Publish or Import)"| BIND
 
     %% ---- Submit -> Run -> Versions ----
@@ -154,8 +154,9 @@ flowchart TD
 
 ## View 1b — Asset Production sub-flow (generalized; supervisor-only)
 
-Each internal Asset — **Character-Sheet**, **First/Last-Frame**, and **Lipsync-Dialog** (Spells), and
-**Depth-Pass** (a hardened `depth-pass` Skill plus variant Spells like `depthcrafter-bw20`) — instantiates
+Each internal Asset — **Character-Sheet**, **First/Last-Frame**, and **Lipsync-Dialog** (Spells), and a
+**Control-Pass** (run.type `control-pass`: depth/canny/openpose/matte, each a Spell via `spec.method`; the
+depth flavor is the hardened `depth-pass` Skill — ADR 0017) — instantiates
 this one loop. It is the
 same Submit→Run→Version→Publish spine as a Shot, **minus the client gate**: an Asset is **approved by the
 supervisor (Andy) only**, then its **Publish** is what gets bound into a Shot Role.
@@ -187,7 +188,7 @@ flowchart TD
 | **Character-Sheet** | Spell (working layer) | own Template + Spell | Character-Sheet |
 | **First / Last-Frame** | Spell (working layer) | own Template + Spell | First-Frame / Last-Frame |
 | **Lipsync-Dialog** | Spell (working layer) | own Template + Spell (AI VO); sourced VO binds as an Import | Lipsync-Dialog |
-| **Depth-Pass** | **Skill** (hardened spine) + variant Spells (`depthcrafter-bw20`, `depthcrafter-anyline-combo`) | spine in `skills/`, recipes in `spellbook/spells/` | Depth-Pass |
+| **Control-Pass** (`control-pass`) | flavor = Spell via `spec.method`; the depth flavor is a hardened **Skill** | depth spine in `skills/`, all flavor recipes in `spellbook/spells/` (`depthcrafter-bw20`, `canny`, `openpose`, `matte-*`, …) | per-kind: Depth-Pass / Canny / OpenPose / Matte |
 
 A Spell **graduates into a Skill** when invoked often enough (ADR 0001/0009) — that is why depth-pass is
 already a Skill and the other two are not yet.
@@ -230,7 +231,7 @@ flowchart LR
     end
 
     RUNNER["Runner (fal / Comfy / Magnific)"]:::sys
-    ROUST["Roustabout (deterministic, NOW)<br/>thin Python · LISTEN/NOTIFY · FLOWS[run.type]<br/>proxy · log · notify · chain (reacts to a landed take — no poll, no pointer-back)"]:::sys
+    ROUST["Roustabout (deterministic, NOW — ADR 0018)<br/>thin Python · LISTEN/NOTIFY over durable events outbox (ADR 0019) · idempotent<br/>FLOWS[run.type] on VersionRecorded: per-take proxy/log + per-run barrier (contact-sheet/notify/auto-publish)<br/>CHAINS on PublishRecorded: wired judgment-free follow-on Runs, matched on Role/tag"]:::sys
     RING["Ringmaster (agent, LATER — deferred)<br/>judges quality / what next · Hermes @ Ramdass"]:::ai
     NOTION[("Notion — one-way READ view")]:::book
 
@@ -249,17 +250,19 @@ flowchart LR
     REND --> STORE
     RUNNER --> STORE
 
-    %% event seam — VersionRecorded fires only AFTER the take's output lands (address persisted); never at dispatch, never a DB trigger (ADR 0013)
+    %% event seam — events are durable outbox rows (same txn as the row), NOTIFY is only a wakeup (ADR 0019); VersionRecorded fires only AFTER the take lands & address persisted (ADR 0013)
+    T_EVT[("events (outbox)<br/>VersionRecorded / PublishRecorded · status · operational, NOT provenance")]:::sys
     STORE ==>|"render-complete (Flamenco callback / sync Runner return)"| SUBM
     SUBM -->|"UPDATE versions.address (pointer back to landed output)"| T_VER
-    SUBM ==>|"emit VersionRecorded — a finished take exists"| ROUST
-    ROUST -->|"render proxy/thumbnail"| STORE
-    ROUST -->|"chain next stage (calls Submitter)"| SUBM
+    SUBM ==>|"write event row (same txn) + NOTIFY: VersionRecorded (take landed) · PublishRecorded (publish born)"| T_EVT
+    T_EVT ==>|"LISTEN + drain pending on startup (at-least-once)"| ROUST
+    ROUST -->|"per-take: render proxy/thumbnail"| STORE
+    ROUST -->|"auto-publish (control-pass / single-output upscale·comp) · chain wired Run — calls Submitter (idempotent)"| SUBM
     ROUST -.->|"needs judgment? escalate (later)"| RING
 
-    %% gates
-    T_VER --> PROMOTE["Promote (internal/supervisor gate) — Shots & Assets"]:::sys
-    PROMOTE -->|"INSERT publish (p###)"| T_PUB
+    %% gates — promote is a human supervisor gate, OR auto by the Roustabout (control-pass / single-output upscale·comp); either way the Submitter INSERTs the publish and emits PublishRecorded
+    T_VER --> PROMOTE["Promote (internal gate) — Shots & Assets<br/>human supervisor OR Roustabout auto-publish (ADR 0018)"]:::sys
+    PROMOTE -->|"INSERT publish (p###) → emit PublishRecorded"| T_PUB
     T_PUB --> DELIVERV["Deliver (client gate) — Shot deliverable ONLY"]:::sys
     DELIVERV -->|"INSERT delivery (client v#)"| T_DEL
 
@@ -284,10 +287,11 @@ flowchart LR
 | Moment | Writes to Postgres (Mckenna) | Manifest |
 |---|---|---|
 | **create-project** | `INSERT projects` → returns `db_project_id` (UUID) | written **once** (thin, one per Job); `db_project_id` stored |
-| **Submit** (a Run — Shot / Asset / **Comp** / **Up-res**) | `INSERT runs` (authoring recipe: `template_ref`, `params`, type-specific **`spec`** (ADR 0016); `type` ∈ seed-sweep / prompt-variation / xy-plot / refine / **comp** / **upscale** / **depth-pass**) + `INSERT bindings` (all inputs asset→role, incl. `Source` / `Comp-Input`) + `INSERT versions` (Submitter **expands `spec`** → one per take; `stage` render/upscale/comp, `frozen_submission` JSONB, **`address` NULL** until the take lands) | untouched |
-| **Render completes** (Flamenco callback / sync Runner return) → **Submitter** | `UPDATE versions.address` (pointer back to the landed output) → **emit `VersionRecorded`** (ADR 0013) | untouched |
-| **`VersionRecorded`** → **Roustabout** | *(no version-row write)* renders proxy/thumbnail, logs, notifies, chains the next stage | untouched |
-| **Promote** (internal/supervisor gate — Shots, Assets, Comp, Up-res) | `INSERT publishes` (`p###`, `source_version_id`) | untouched |
+| **Submit** (a Run — Shot / Asset / **Comp** / **Up-res**) | `INSERT runs` (authoring recipe: `template_ref`, `params`, type-specific **`spec`** (ADR 0016); `type` ∈ seed-sweep / prompt-variation / xy-plot / refine / **comp** / **upscale** / **control-pass**) + `INSERT bindings` (all inputs asset→role, incl. `Source` / `Comp-Input`) + `INSERT versions` (Submitter **expands `spec`** → one per take; `stage` render/upscale/comp, `frozen_submission` JSONB, **`address` NULL** until the take lands) | untouched |
+| **Render completes** (Flamenco callback / sync Runner return) → **Submitter** | `UPDATE versions.address` (pointer back to the landed output) + **write `events` outbox row** (same txn) → **emit `VersionRecorded`** via `NOTIFY` (ADR 0013/0019) | untouched |
+| **`VersionRecorded`** → **Roustabout** | *(no version-row write)* **per-take:** proxy/thumbnail + log. **per-run barrier (N of N landed):** contact-sheet (if >1 take), one "run done" notify, and **auto-publish** if `type ∈ {control-pass, upscale, comp}` ∧ count==1 (calls Submitter — ADR 0018) | untouched |
+| **Promote** (internal gate — Shots, Assets, Comp, Up-res) — **human supervisor OR Roustabout auto** | `INSERT publishes` (`p###`, `source_version_id`) + **write `events` row** → **emit `PublishRecorded`** | untouched |
+| **`PublishRecorded`** → **Roustabout** | *(no publish-row write)* fires **wired chains** matched on the Publish's **Role/tag** → a fully-pinned follow-on Run (calls Submitter; e.g. Hero → depth `control-pass`) — ADR 0018 | untouched |
 | **Deliver** (client gate — approval round **and** final master, each a Delivery) | `INSERT deliveries` (client `v#`, `source_publish_id`) | untouched |
 | **Asset registered / re-resolved** | `INSERT/UPDATE assets` (Publish XOR Import) | untouched |
 
@@ -325,5 +329,10 @@ a Template can never invalidate an existing Version). Feedback loop: a method is
 - **What a Template's "function" keys on** — **resolved:** a Template's function = **workflow-type/mode**
   (`t2v`/`i2v`/`r2v`, = `runs.mode`); a **Block's** function = **prompt-purpose** (camera/style/lighting/
   motion). Spellbook indexes Templates by model×mode, Blocks by model×purpose.
-- **Roustabout `FLOWS[run.type]`** — exact deterministic flow per `run.type` (incl. `depth-pass` and the
-  Asset Runs: proxy? contact-sheet? auto-publish?) is the next implementation grill (HANDOFF §OPEN 5).
+- **Roustabout `FLOWS` — resolved (ADR 0018/0019).** Two-tier reactions on `VersionRecorded` (per-take
+  proxy/log + per-run barrier: contact-sheet/notify/auto-publish), **bounded auto-publish**
+  (`control-pass` + single-output `upscale`/`comp`), **wired judgment-free chains** on `PublishRecorded`
+  (matched on Role/tag), delivered by `LISTEN/NOTIFY` over a durable `events` outbox with idempotent
+  handlers. `control-pass` is **one** flow that sub-branches on Role / `spec.method` (ADR 0017).
+  **Remaining = implementation:** the `events` table migration, idempotency keys, the concrete `CHAINS`
+  registry (first: Hero → depth), and the notify channel.

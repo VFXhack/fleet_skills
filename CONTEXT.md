@@ -5,12 +5,17 @@
 > It is the source of truth for what words *mean*. Keep it tight. Sharpen terms here
 > via `grill-with-docs` sessions; record non-obvious decisions as ADRs in `/adr`.
 >
-> **Status:** v0.6 (2026-06-26) — Session 6 PIPELINE-hardening grill. Hardened `PIPELINE.md` to canon:
+> **Status:** v0.8 (2026-06-26) — Session 7. (1) Generalized `depth-pass` → **`control-pass`**: depth,
+> canny, openpose, mattes are **one run.type**, flavored by a **Spell** via `spec.method`, each bound in a
+> per-kind **Role** (ADR 0017, amending 0014/0016). (2) Pinned the **Roustabout `FLOWS`**: two-tier
+> reactions (per-take + a per-run completion barrier), **bounded auto-publish** (control-pass + single-output
+> upscale/comp), **wired judgment-free chains**, and a second event **`PublishRecorded`** (ADR 0018);
+> delivery is **`LISTEN/NOTIFY` over a durable `events` outbox** (ADR 0019). Prior (Session 6)
+> PIPELINE-hardening canon stands:
 > `VersionRecorded` fires after the take lands & the Submitter writes the address (ADR 0013); `run.type`
 > is one rich Roustabout dispatch enum, orthogonal to `stage` (ADR 0014); the Shot code gains the Episode
-> token `JOB_EP_SEQ_SHOT` (ADR 0015); Template "function" = mode, Block "function" = purpose. Also defined
-> the per-`run.type` **spec** contract — each type's variables, xy-plot axes (knob + explicit values,
-> N=points), inputs-via-bindings — and added `runs.spec` (ADR 0016). ADRs 0002–0016.
+> token `JOB_EP_SEQ_SHOT` (ADR 0015); Template "function" = mode, Block "function" = purpose; the
+> per-`run.type` **spec** contract + `runs.spec` (ADR 0016). ADRs 0002–0017.
 
 ---
 
@@ -85,9 +90,12 @@ The connective tissue of the pipeline and an **atomic tool** (ADR 0010): **inges
 **writes** the Run/Version to the **Postgres provenance store** on **Mckenna** (`versions.address` NULL
 at this point) → **dispatches** heavy render work to **Flamenco** (or a **Runner**) → **on render
 completion** writes the take's output **`address`** back and **emits `VersionRecorded`** — so the event
-always means *a finished, addressable take exists*, never *a render was requested* (ADR 0013). It does
-**not** orchestrate downstream work (proxy, next steps) — that is the **Roustabout**'s job, fired by the
-event.
+always means *a finished, addressable take exists*, never *a render was requested* (ADR 0013). It is also
+the **sole event emitter**: on every **publish** insert (the Roustabout's auto-publish **or** a human
+supervisor-gate promote) it emits **`PublishRecorded`** (ADR 0018). Both events are written as durable
+**`events` outbox** rows in the **same transaction** as the version/publish insert, then `NOTIFY`-ed
+(ADR 0019). It does **not** orchestrate downstream work (proxy, next steps) — that is the **Roustabout**'s
+job, fired by the event.
 _Avoid_: putting next-step / orchestration logic in the Submitter (or in DB triggers); emitting
 `VersionRecorded` before the output has landed.
 
@@ -98,16 +106,30 @@ seam to the **Submitter** is always the **event**, never an in-process call or a
 
 ### Roustabout
 The **deterministic floor of orchestration — the crew that rigs between acts (now).** Subscribes to
-events (starting with **`VersionRecorded`**), **branches by `run.type` / Role / stage**, and runs a
-**pre-wired flow**: renders the **proxy/thumbnail**, logs, notifies, and chains next stages. (The take's
-output **`address`** is already written by the **Submitter** at render completion — ADR 0013 — so the
-Roustabout reacts to a guaranteed-existing artifact and never writes the pointer or polls.) **Rule-based,
-no LLM, no judgment** — if a step needs to *judge*, that logic belongs **up** in the **Ringmaster**. It **calls** the Submitter as one instrument; it is not the Submitter.
-Filled today by a **thin Python worker** (Postgres `LISTEN/NOTIFY` + a `FLOWS[run.type]` dispatch table);
-it **graduates** to a real workflow engine (Prefect / Temporal / Windmill / …) only when hand-rolled
-retries/observability earn it — the **Spell → Skill** rule (ADR 0012).
+orchestration **events** and runs **pre-wired flows** (full model in ADR 0018). **Rule-based, no LLM, no
+judgment** — if a step needs to *judge*, that logic belongs **up** in the **Ringmaster**. It **calls** the
+Submitter as one instrument; it is not the Submitter. (Every take's **`address`** is already written by the
+Submitter at render completion — ADR 0013 — so the Roustabout reacts to a guaranteed-existing artifact and
+never writes the pointer or polls.) Its authority (ADR 0018):
+- **Two tiers on `VersionRecorded`.** **Per-take:** render the **proxy/thumbnail** + write a **structured
+  log**. **Per-run (a completion barrier — "N of N versions landed", a deterministic count it *reads*, ADR
+  0016):** assemble a **contact sheet** when the run made **>1 comparable take**, fire **one** "run done"
+  notify, and **auto-publish** per the rule below.
+- **Bounded auto-publish (may cross Version→Publish):** only when `run.type ∈ {control-pass, upscale, comp}`
+  **and** the run expanded to **exactly 1 version** — nothing to choose. Creative sweep-shapes never
+  auto-publish (picking a take is judgment). The output **lands as a Version, then is auto-promoted**.
+- **Wired chains (may start new Runs) on `PublishRecorded`:** only **judgment-free** transitions —
+  `(trigger + Role/tag match) → a fully-pinned Run recipe` (default Spell, fixed params), e.g. a tagged 720
+  Hero → its depth `control-pass`. Any runtime choice disqualifies it (→ human / Ringmaster). A **short
+  explicit registry**, not a workflow graph.
+
+Filled today by a **thin Python worker** — Postgres `LISTEN/NOTIFY` over a **durable `events` outbox**
+(ADR 0019), a `FLOWS[run.type]` reaction table, and a `CHAINS` registry keyed on Role/tag. **Actions are
+idempotent** (delivery is at-least-once). It **graduates** to a real workflow engine (Prefect / Temporal /
+Windmill / …) only when hand-rolled retries/observability earn it — the **Spell → Skill** rule (ADR 0012).
 _Avoid_: collapsing the Roustabout into the Submitter; naming this role after a tool ("Griptape" is a
-candidate **tool**, not this role); putting orchestration in the **DB**.
+candidate **tool**, not this role); putting orchestration in the **DB**; letting a chain make a runtime
+choice (that is the Ringmaster's).
 
 ### Ringmaster
 The **agent floor of orchestration — the show-director (later).** Looks at outputs and **decides**
@@ -119,6 +141,17 @@ the Roustabout and is **deferred** — only the Roustabout exists today. Tooling
 _Avoid_: pushing Ringmaster (judging) logic down into the Roustabout or the Submitter; putting
 orchestration in the **DB**.
 
+### Orchestration events (`VersionRecorded` / `PublishRecorded`)
+The two **events** the **Submitter** emits and the **Roustabout** consumes — the seam between the writer and
+the deterministic floor (ADR 0018). **`VersionRecorded`** = *a take landed* (its `address` is written —
+ADR 0013); drives the Roustabout's per-take + per-run-barrier reactions. **`PublishRecorded`** = *a Publish
+was created* (by auto-publish **or** a human promote); drives **wired chains**, matched on the Publish's
+**Role/tag**. Both are written as durable **`events` outbox** rows in the same transaction as the row they
+describe, then `NOTIFY`-ed for low latency (ADR 0019) — so the event is never lost if the Roustabout is
+down, and the Roustabout's handlers are **idempotent** (at-least-once delivery).
+_Avoid_: treating the `NOTIFY` as the source of truth (the durable `events` row is); emitting before the
+artifact exists.
+
 ### Run
 One **Submit event** logged against a Shot — the unit the Submitter records to Mckenna's DB. Captures
 the **recipe** — `bindings` (all inputs by Role), `params` (fixed base knobs), and a type-specific
@@ -126,10 +159,10 @@ the **recipe** — `bindings` (all inputs by Role), `params` (fixed base knobs),
 more Versions** (the Submitter **expands** the `spec` into them). Has a **`type`** — the single dispatch
 key the **Roustabout** branches on (ADR 0014):
 `seed-sweep`, `prompt-variation`, `xy-plot`, `refine` (gen sweep-shapes) plus the operation types `comp`,
-`upscale`, and `depth-pass`. **Orthogonal to** a Version's **`stage`** (`render` / `upscale` / `comp`),
+`upscale`, and `control-pass`. **Orthogonal to** a Version's **`stage`** (`render` / `upscale` / `comp`),
 which only records which `versions/<stage>/` bucket a take lands in (`comp`→comp, `upscale`→upscale, the
-rest→render). A Run also logs non-gen-AI Skill executions (e.g. a `depth-pass` Run produces a depth
-**Publish**).
+rest→render). A Run also logs non-gen-AI Skill executions (e.g. a `control-pass` Run produces a control
+**Publish** — depth/canny/openpose/matte).
 _Avoid_: **Cast** (flavor — the verb is **Submit**).
 
 ### Submit
@@ -172,7 +205,8 @@ _Avoid_: using "Asset" for a CG **entity** (a modeled character/environment) —
 A **Role** is a property of the **binding** — the use of an Asset by a specific Shot/**Version** —
 **not** of the Asset itself: the same Asset can be **First-Frame** in one Shot and a plain reference
 in another. Values: **First-Frame**, **Last-Frame**, **Lipsync-Dialog**, **Character-Sheet**,
-**Depth-Pass**, **Style**, **Plate/Driver**, **Source** (the Publish an op like upscale/refine/comp
+**Depth-Pass**, **Canny**, **OpenPose**, **Matte** (the per-kind control-pass Roles — ADR 0017),
+**Style**, **Plate/Driver**, **Source** (the Publish an op like upscale/refine/comp
 consumes), **Comp-Input**, … Role is the **wiring key** — it tells the Submitter both how to reference
 the Asset in the prompt **and** which Comfy node / API slot to feed it into.
 Recorded as a binding `{asset → pinned Publish/Import, role}` on the **Version's recipe** — **not** a
@@ -251,11 +285,18 @@ source Version; Import does not) is what keeps provenance honest.
 ### Seed Sweep
 A **Run type**: N **Versions** across seeds (or params) for variation. A set of **Versions**, never of
 Publishes. Other gen Run types: `prompt-variation`, `xy-plot`, `refine`; operation types: `comp`,
-`upscale`, `depth-pass` (full enum in ADR 0014).
+`upscale`, `control-pass` (full enum in ADR 0014, amended by ADR 0017).
 
-### Depth Pass
-A depth-map reference generated from a plate/frame, used to guide gen-AI video.
-The first hardened Skill (`depth-pass`).
+### Control Pass
+A **Run type** (`control-pass`) that derives a **control/structure reference** from a Source plate/frame
+and produces a **Publish** bound downstream in a **per-kind Role**. The kinds — **depth, canny, openpose,
+matte, …** — are **flavors**: each is a **Spell** named by `spec.method` (`depthcrafter-bw20`,
+`depthcrafter-anyline-combo`, `canny`, `openpose`, …). **One run.type, many Spells** (ADR 0017): the type
+is the dispatch family, the Spell is the craft, the Role is the wiring slot. Scope is control/structure
+maps only — **audio** prep and **creative assets** are not control-passes.
+- **Depth Pass** — the depth flavor: a depth-map reference for gen-AI video; the first hardened control
+  craft (the `depth-pass` **Skill**, which implements the depth family of `control-pass` methods).
+_Avoid_: a separate `run.type` per control kind — they share `control-pass` and vary by Spell/Role.
 
 ### Fleet
 The whole networked system of machines + storage, joined over **Tailscale**. Canonical
@@ -384,4 +425,16 @@ trade-offs downstream.
   to** (fal, Comfy, …) — distinct from the one atomic **Submitter**. Each legacy runner is today a
   mini-submitter, to be folded behind the Submitter. **New:** add a **Magnific** runner
   (https://docs.magnific.com/introduction) for AI upscale/enhance → output in `<Shot>/versions/upscale/`.
-- **Branch 6 — real depth-pass method** — pull actual steps to replace the `depth-pass` SKILL.md TODOs. **Next.**
+- **Control passes generalized** — `depth-pass` run.type → **`control-pass`** (depth/canny/openpose/matte =
+  one type, flavor = Spell via `spec.method`, per-kind Role; audio + creative assets out of scope). ✅
+  (→ ADR 0017, amending 0014/0016)
+- **Roustabout `FLOWS`** — two-tier reactions (per-take proxy/log + per-run barrier: contact-sheet/notify/
+  auto-publish); auto-publish bounded to `control-pass` + single-output `upscale`/`comp`; wired
+  judgment-free chains on a `(Role/tag → pinned Run recipe)` registry; second event `PublishRecorded`;
+  delivery = `LISTEN/NOTIFY` + durable `events` outbox, idempotent handlers. ✅ (→ ADR 0018, 0019)
+- **Branch 6 — real control-pass methods** — pull the actual steps for each flavor Spell (the depth ones
+  first) to replace the `depth-pass` SKILL.md TODOs; migrate the variant recipes into `spellbook/spells/`.
+  **Next.**
+- **Implementation deferred (from ADR 0018/0019):** the `events` outbox table (migration
+  `0003_events_outbox.sql`); the notify target/channel (Notion view / a feed); idempotency keys for
+  auto-publish + chains; the concrete `CHAINS` registry contents (first entry: Hero → depth `control-pass`).
