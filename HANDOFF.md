@@ -15,6 +15,33 @@ visualizes exactly what this handoff describes). Then read the memory `andy-work
 - **As decisions land: update `CONTEXT.md` inline and write an ADR** in `/adr` (number sequentially,
   follow 0001's format) for any non-obvious, hard-to-reverse decision. Never leave decisions only in chat.
 
+## Session 8 (2026-06-27) — INFRA: provenance DB is LIVE; fleet synced; spine PROVEN
+First non-grilling session — stood up real infra and proved the code spine against it. No
+CONTEXT/ADR changes (ops only). The recurring "stand up Postgres on Mckenna" action is DONE.
+- **Postgres on Mckenna is up** (PG 17 cluster `17/main`). Created db `fleet` + role `fleet`
+  (LOGIN, scram); applied migrations **0001–0003** (8 tables + `runs.spec`); tailnet exposure
+  (`listen_addresses = localhost,100.108.34.23`, pg_hba `100.64.0.0/10` scram); wrote
+  `~/.fleet/config.toml`. Idempotent setup script lived at `/tmp/fleet_setup.sh` on Mckenna.
+  DSN password is in that config (chmod 600), NOT in git/memory. (memory: `fleet-db-live`)
+- **Spine PROVEN end-to-end live:** seeded a `control-pass` run + 1 landed version, ran
+  `roustabout.worker` + `submitter.emit_demo version <id>`. Full chain fired: emit → outbox
+  INSERT+NOTIFY → worker drain → take-landed + run-complete barrier (1/1) + auto-publish
+  eligibility (control-pass ∧ count==1 → eligible) → event `done`. psycopg 3.3.4 installed via
+  `pip install --user --break-system-packages` (Mckenna has no `python3-venv`).
+- **Fleet synced (ADR 0009):** pushed Leary's 2 Session-7 commits to origin, then `git clone`
+  on **Huxley / Ramdass / Watts** — all at `3ed805b`. Future updates = `git pull`. Per-host SSH
+  logins DIFFER (memory: `fleet-hosts` — `andy`@mckenna/huxley, `andyorloff`@ramdass, `ajorl`@watts;
+  Mckenna sudo is sudo-rs needing a real TTY; Watts shell is cmd.exe).
+- **Open (cheap):** the spine proof left a `DEMO`/`SPINE` smoke-test project+run+version+event in
+  the DB — delete those 4 rows (cascade from the project) for a clean store before real writes.
+
+**Single next action (START HERE): build the Submitter ingest/dispatch slice.** The emit + write
+paths exist (`submitter/events.py`, `writes.py`); what's missing is the front half: ingest a Submit
+→ insert the `runs` row + `bindings` (roles) → VALIDATE `spec` against the Template's declared knobs
+→ EXPAND `spec` into N `versions` (each with `delta` + `frozen_submission`, ADR 0016/0007) → dispatch
+to a Runner. Then a take lands → `record_landed_take` (already built) emits `VersionRecorded` → the
+proven Roustabout spine takes over. Clear the DEMO rows first. Infra is ready and live — no setup tax.
+
 ## Session 7 (2026-06-26) — `control-pass` generalizes `depth-pass` (do NOT re-litigate)
 Andy's call: depth isn't special — it's one flavor of a whole family of control/structure inputs.
 - **ADR 0017** — replaced the `depth-pass` `run.type` with **`control-pass`**: depth, canny, openpose,
