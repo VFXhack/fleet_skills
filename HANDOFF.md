@@ -35,13 +35,28 @@ Ops/infra session. No CONTEXT/ADR text changes; set up repeatable testing so fut
 - **Also:** reverted an unrequested `settings.json` change a statusline subagent slipped in
   (`permissions.defaultMode=auto` + `skipAutoPermissionPrompt=true`) — approval gates restored.
 
-**Single next action (START HERE):** create the **disposable test project** against `fleet_test`
-(`export FLEET_DB_DSN="$(bash db/test_db.sh dsn)"`, then `python -m fleet.cli --client TEST --job
-SANDBOX --title "…" --dry-run` first). Use it to PROVE the already-built `create-project`/`fleet.cli`
-end-to-end (DB row + ADR-0003 tree on `\\huxley\io_common\projects`), `reset` between runs. Then build
-the **Import/publish CLI** (put outside-made material in as Publishes — `promote()` exists; the Import
-half does not), then a **thin read CLI** to view the store. (Andy reprioritized these AHEAD of the
-Submitter ingest slice — value sooner, less machinery.)
+- **`create-project` PROVEN live (2026-06-28):** ran `fleet.cli --client TEST --job SANDBOX` against
+  `fleet_test` (dev box, `FLEET_DB_DSN` → tailnet `/fleet_test`). Verified: `projects` row inserted;
+  ADR-0003 tree scaffolded on `\\huxley\io_common\projects\TEST\SANDBOX` (`_ops/{config,jobs,logs,
+  scripts}`, `assets/`, `editorial/`, `EP01/deliverables/`, `CONTEXT.md`, `manifest.json`); the thin
+  manifest's `db_project_id` == the DB row UUID (ADR-0006 round-trip ✅); a re-run **refused** to
+  clobber (exit 1, no partial write). Then torn down (DB reset + folder removed) — recreate in seconds.
+- **Tailnet pg_hba broadened (2026-06-28):** Session-8's rule allowed only the `fleet` *database* over
+  Tailscale, so dev-box clients couldn't reach `fleet_test`. Appended `host all fleet 100.64.0.0/10
+  scram-sha-256` + reload → the `fleet` *role* now reaches any DB over the tailnet (test DBs included).
+- **Sync gap to check next time:** Mckenna's `~/fleet_skills` is NOT a git clone (`git pull` fails) and
+  its config has no `[paths].projects_root` — so the committed `db/test_db.sh` isn't deployed there and
+  Mckenna can't run dev-box tools as-is. Fine for now (helper runs from the dev box); fix if a
+  Mckenna-side run is needed (e.g. the multi-process spine test wants the worker on Mckenna).
+
+**Single next action (START HERE): build the Import/publish CLI** — the smallest tool that puts
+outside-made material (a hand-rendered take, a Nuke comp, a manual upscale) into the system as a
+**Publish** (ADR 0005 Import path). `submitter/writes.py:promote()` already does Version→Publish + the
+`p###` allocation + `PublishRecorded`; what's missing is the **Import half** (register an external
+artifact as a Version, or a human-facing CLI around register+promote) and a persisted publish tag/role.
+Test it against `fleet_test` (recreate a `TEST/SANDBOX` fixture via `create-project`, `reset` between
+runs). Then a **thin read CLI** to view the store. (Andy reprioritized these AHEAD of the Submitter
+ingest slice — value sooner, less machinery.)
 
 ## Session 8 (2026-06-27) — INFRA: provenance DB is LIVE; fleet synced; spine PROVEN
 First non-grilling session — stood up real infra and proved the code spine against it. No
