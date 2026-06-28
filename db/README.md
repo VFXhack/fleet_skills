@@ -33,3 +33,29 @@ your home dir):
 sudo -u postgres psql -d fleet < migrations/0001_initial_schema.sql
 ```
 Or, once a client with the `fleet` DSN is set up, apply over the network as the `fleet` role.
+
+## Test database (`fleet_test`)
+
+**All testing runs against a separate `fleet_test` database — never prod `fleet`.** This is the
+isolation boundary: test rows physically cannot mix with real ones, teardown is a blunt `TRUNCATE`
+(not a surgical scoped delete), and the connection recipe is committed so no session re-discovers it.
+
+- **Same Mckenna cluster**, same schema (migrations `0001`–`0003` applied), owned by the `fleet`
+  role (granted `CREATEDB` once, 2026-06-28, so it can self-serve test DBs over the network).
+- **Helper:** `db/test_db.sh` (run where `psql` is reachable — on Mckenna, or any tailnet box with
+  `psql`). Resolves the test DSN from `$FLEET_TEST_DSN`, else the prod `[db].dsn` in
+  `~/.fleet/config.toml` with the database name swapped to `fleet_test`.
+
+  | Command | Does |
+  |---|---|
+  | `bash db/test_db.sh setup` | create `fleet_test` if absent + apply all migrations |
+  | `bash db/test_db.sh reset` | `TRUNCATE` every table back to empty (the fast teardown) |
+  | `bash db/test_db.sh info`  | row counts per table |
+  | `bash db/test_db.sh dsn`   | print the resolved test DSN |
+  | `bash db/test_db.sh psql`  | psql shell against `fleet_test` |
+
+- **Point a tool at the test DB:** tools resolve `FLEET_DB_DSN` before the config file, so
+  `export FLEET_DB_DSN="$(bash db/test_db.sh dsn)"` (or on Windows, set `$env:FLEET_DB_DSN` to the
+  `…/fleet_test` DSN) makes `create-project` / the Submitter write to `fleet_test`. Unset it to hit prod.
+- **Safety:** every destructive op in the helper asserts the resolved DSN targets `fleet_test`; pointed
+  at prod it refuses and exits non-zero. Verified 2026-06-28.

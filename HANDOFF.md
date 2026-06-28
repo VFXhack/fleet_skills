@@ -15,6 +15,34 @@ visualizes exactly what this handoff describes). Then read the memory `andy-work
 - **As decisions land: update `CONTEXT.md` inline and write an ADR** in `/adr` (number sequentially,
   follow 0001's format) for any non-obvious, hard-to-reverse decision. Never leave decisions only in chat.
 
+## Session 9 (2026-06-28) — INFRA: test DB harness; store cleaned; ADR-0003 confirmed canon
+Ops/infra session. No CONTEXT/ADR text changes; set up repeatable testing so future work is cheap.
+- **Prod store cleaned:** deleted the Session-8 `DEMO/SPINE` smoke rows (project+run+version+event,
+  one txn, child-first; `events` has no FK so removed by `subject_id`). All 8 tables at 0 — pristine.
+- **Separate test DB `fleet_test` (the headline):** ALL testing now runs against `fleet_test`, never
+  prod `fleet`. Granted the `fleet` role `CREATEDB` (one-time superuser on Mckenna), created
+  `fleet_test`, applied migrations `0001`–`0003`. New committed harness: **`db/test_db.sh`**
+  (`setup|reset|info|dsn|psql`) + **`db/reset_test.sql`** (blunt `TRUNCATE … RESTART IDENTITY
+  CASCADE`); recipe in `db/README.md` → "Test database". Point tools at it with
+  `export FLEET_DB_DSN="$(bash db/test_db.sh dsn)"`. Destructive ops **refuse any non-`fleet_test`
+  DSN** (verified). This is the fix for "it took ages to find/clear test rows": isolation by
+  construction, blunt teardown, committed connection recipe (no re-discovery). (memory: `fleet-db-live`)
+- **ADR-0003 confirmed CANON (reconciliation gap RESOLVED):** Andy's call — the canonical on-disk
+  tree is ADR-0003; the real legacy `AI_Renders` layout (AWA, Centenario) is legacy, not the model.
+  New jobs get the ADR-0003 tree via `create-project`. (Migrating existing legacy jobs = open, later.)
+- **Fixed:** the local (Watts/dev) `~/.fleet/config.toml` had a STALE DB password → `fleet` auth
+  failed; corrected to match Mckenna's authoritative DSN. Rotating the role pw must update EVERY host.
+- **Also:** reverted an unrequested `settings.json` change a statusline subagent slipped in
+  (`permissions.defaultMode=auto` + `skipAutoPermissionPrompt=true`) — approval gates restored.
+
+**Single next action (START HERE):** create the **disposable test project** against `fleet_test`
+(`export FLEET_DB_DSN="$(bash db/test_db.sh dsn)"`, then `python -m fleet.cli --client TEST --job
+SANDBOX --title "…" --dry-run` first). Use it to PROVE the already-built `create-project`/`fleet.cli`
+end-to-end (DB row + ADR-0003 tree on `\\huxley\io_common\projects`), `reset` between runs. Then build
+the **Import/publish CLI** (put outside-made material in as Publishes — `promote()` exists; the Import
+half does not), then a **thin read CLI** to view the store. (Andy reprioritized these AHEAD of the
+Submitter ingest slice — value sooner, less machinery.)
+
 ## Session 8 (2026-06-27) — INFRA: provenance DB is LIVE; fleet synced; spine PROVEN
 First non-grilling session — stood up real infra and proved the code spine against it. No
 CONTEXT/ADR changes (ops only). The recurring "stand up Postgres on Mckenna" action is DONE.
