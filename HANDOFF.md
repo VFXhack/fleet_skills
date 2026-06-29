@@ -15,6 +15,48 @@ visualizes exactly what this handoff describes). Then read the memory `andy-work
 - **As decisions land: update `CONTEXT.md` inline and write an ADR** in `/adr` (number sequentially,
   follow 0001's format) for any non-obvious, hard-to-reverse decision. Never leave decisions only in chat.
 
+## Session 10 (2026-06-29) — Sequence Pattern model (ADR 0020) + structure tools; fleet landed
+Grill + build session. Modeled how a Sequence shares state, then built the structure-layer tools on it.
+Committed `8e30e74` on `main`, pushed, and synced all four hosts. (memory: `cli-build-and-prove-loop`)
+- **Process locked — the build-and-prove loop:** every CLI tool = I write it → self-prove vs `fleet_test`
+  (NEVER prod) → hand Andy a "how to drive it" card → he tests → revise → only on his explicit approval is
+  it "prime time". Prove each tool in isolation before composing. (memory `cli-build-and-prove-loop`.)
+- **ADR-0020 (the headline): a Sequence carries shared state via live inheritance + a Sequence Pattern.**
+  - **3-way sharing class** (the rule for what propagates): **shared-content** (one artifact, all shots →
+    `assets.scope='sequence'`), **shared-recipe** (same settings, content regenerated per shot, e.g. a
+    depth-pass = a `control-pass` Run auto-published no-look by Roustabout → a prototype Run), **per-shot**
+    (differs per shot, e.g. audio → `assets.scope='shot'`).
+  - **Sequence Pattern** = a set of **prototype Runs** (named "Pattern", NOT Template/Recipe/Spec — taken;
+    NOT Blueprint — Unreal collision). A Shot **instantiates** it; **Hoist** lifts an approved **look-dev
+    (Target) Shot**'s recipe UP, **selectively by class** (class is born at Hoist). **Override** = a Shot's
+    local value + a shield against later Sequence changes. Hoist ≠ promote (up-the-structure vs across-a-gate).
+  - **Hygiene:** reverses ADR-0003 (no Sequence level) + 0008/0011 (no structure in DB) for Sequence
+    *config* only; added forward **"Amended by ADR 0020"** markers to 0003/0008/0011 so CONTEXT.md stays the
+    single live truth (Andy's call: mark history, don't delete the reasoning). CONTEXT.md updated inline.
+- **Schema — migration `0004` (proven on `fleet_test`):** `sequences`, `sequence_pattern_runs`,
+  `sequence_pattern_bindings` (3-way source CHECK: `asset_id` XOR `produced_by_pattern_run_id` XOR neither,
+  matching the class), `assets.scope += 'sequence'` + `assets.sequence_code`. All CHECK behaviors verified.
+- **Tools (proven vs `fleet_test`, Andy-approved):** `add-shot` (stamps the ADR-0003 shot tree, ensures the
+  Sequence config row on first shot, `--lookdev`) and `add-sequence` (manage title + (re)designate look-dev,
+  validating the shot folder exists). New: `fleet/naming.py` (`JOB_EP_SEQ[_SHOT]` codes; `_` separates so
+  parts can't contain `_`), `scaffold.scaffold_shot_tree`, repository sequence fns. Entry points added.
+- **Ops — fleet landed + synced to `8e30e74`:** Huxley/Ramdass/Watts `git pull`ed clean. **Mckenna's
+  `~/fleet_skills` was NOT a git clone** (the Session-9 sync gap) — a stale non-git file copy; **fresh-cloned
+  it** (old copy preserved at `~/fleet_skills.bak`). `~/ao-tools` on Mckenna is a SEPARATE unrelated repo —
+  not fleet_skills. Host-map memory corrected.
+- **Open (ADR-0020, settle when building Hoist/Instantiate):** where a Shot's overrides live; confirm
+  `sequence_code` form (`JOB_EP_SEQ`); optional Hoist provenance breadcrumb; whether `ord` suffices to
+  schedule the per-Shot chain or `produced_by_pattern_run_id` should drive a topo order.
+
+**Single next action (START HERE): build the Hoist / Instantiate engine** — where the Sequence Pattern
+comes alive. Two halves: **Instantiate** (a non-target Shot's submit clones the Pattern's prototype Runs →
+binds shared-content, re-runs shared-recipe for its own content via the existing version→publish→bind spine
++ Roustabout no-look, demands per-shot inputs) and **Hoist** (supervisor classifies the look-dev Shot's
+recipe by sharing class, lifts it into the Pattern, clears the now-redundant overrides, bumps
+`pattern_version`). Lives in the **Submitter** (resolve Shot-over-Sequence inheritance, freeze per Version
+per ADR-0007). Prove against `fleet_test` per the loop. Note: the structure layer (`create-project` →
+`add-shot` → `add-sequence`) is done + proven; this is the behavior layer on top.
+
 ## Session 9 (2026-06-28) — INFRA: test DB harness; store cleaned; ADR-0003 confirmed canon
 Ops/infra session. No CONTEXT/ADR text changes; set up repeatable testing so future work is cheap.
 - **Prod store cleaned:** deleted the Session-8 `DEMO/SPINE` smoke rows (project+run+version+event,
