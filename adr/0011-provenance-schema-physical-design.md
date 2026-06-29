@@ -7,6 +7,9 @@ at render-completion, *then* `VersionRecorded` fires); ADR 0014 (`runs.type` val
 `seed-sweep / prompt-variation / xy-plot / refine / comp / upscale / control-pass` — `depth-pass`
 generalized to `control-pass` by ADR 0017 — orthogonal to `versions.stage` and used as the single
 Roustabout dispatch key).
+**Amended by:** ADR 0020 — adds `sequences`, `sequence_pattern_runs`, `sequence_pattern_bindings` tables
+and a third `assets.scope` value (`sequence`) + `assets.sequence_code` (migration `0004`). The 7-table
+count below is now 10 (+ the Sequence config/Pattern). Current live truth: `CONTEXT.md` + migration `0004`.
 
 ## Context
 ADR 0008 decided *what* the provenance core is (own thin Postgres on Mckenna, 7 UL tables) and

@@ -18,6 +18,17 @@ JOB_DIRS = [
     "editorial",      # Premiere/AE cut assembly (job-wide finishing)
 ]
 
+# Per-Shot directories (ADR 0003): everything for a Shot lives in its one folder.
+SHOT_DIRS = [
+    "assets",            # shot-specific input files (flat; Role is metadata, not folder)
+    "work/blender",      # .blend + autosave (the .blend Flamenco renders)
+    "work/nuke",         # .nk scripts
+    "versions/render",   # model takes + seed sweeps  (v###)
+    "versions/upscale",  # Topaz / up-res tries
+    "versions/comp",     # comp renders
+    "publishes",         # internal-promoted takes (p###) — stable, canonical
+]
+
 PROJECT_CONTEXT_TEMPLATE = """# CONTEXT.md — {title} ({client_code}/{job_code})
 
 Project-local notes and glossary. Inherits the system ubiquitous language from the
@@ -43,6 +54,20 @@ def scaffold_job_tree(job_dir: Path, *, episode: str = "EP01") -> list[Path]:
     created: list[Path] = []
     for rel in JOB_DIRS + [f"{episode}/deliverables"]:
         directory = job_dir / rel
+        directory.mkdir(parents=True, exist_ok=True)
+        created.append(directory)
+    return created
+
+
+def scaffold_shot_tree(shot_dir: Path) -> list[Path]:
+    """Create the ADR-0003 per-Shot skeleton (assets/ work/ versions/ publishes/).
+
+    Idempotent (exist_ok). Returns the directories created/ensured. Intermediate
+    Episode/Sequence dirs are made as needed (parents=True).
+    """
+    created: list[Path] = []
+    for rel in SHOT_DIRS:
+        directory = shot_dir / rel
         directory.mkdir(parents=True, exist_ok=True)
         created.append(directory)
     return created

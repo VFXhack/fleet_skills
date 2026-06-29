@@ -74,7 +74,12 @@ gets a folder root, a `manifest.json`, and a `CONTEXT.md`, and is created via `c
   **`job_code`** (e.g. `AWA`). The Job folder is the Project root / `base_path`.
 - **Episode** — an installment within a Job. **Always present** as a level, even for
   single-episode Jobs (one-offs get one Episode).
-- **Sequence** — a named group of Shots within an Episode (e.g. `SALEM`, `JUGDEAD`, `TITLE`).
+- **Sequence** — a named group of Shots within an Episode (e.g. `SALEM`, `JUGDEAD`, `TITLE`) that
+  **carries a Sequence Pattern its Shots inherit live** (shared LUT/CFG/workflow params, shared
+  Asset→Role bindings, and re-runnable recipes like the depth-pass). A Shot may **override** an inherited
+  value locally; an approved change on the **look-dev Shot** is **Hoisted** up to the Sequence so siblings
+  inherit it. Backed by a small `sequences` config record + Pattern in the DB (ADR 0020) — but a
+  Sequence's *existence* is still its folder in the tree, not the row. See *Sequence inheritance*.
 - **Shot** — the atomic unit of production: one continuous gen-AI video segment, the thing a
   **Run** acts on. Coded `JOB_EP_SEQ_SHOT` (e.g. `AWA_EP01_SALEM_010`) — the Episode token is
   **included** because Sequence names recur across Episodes, and the code self-locates to its
@@ -84,6 +89,38 @@ _Avoid_: using "project" for a shot or a deliverable — a Project is the **Job*
 _Avoid_: **Show** (use *Episode*), **Scene** (use *Sequence* — "scene" carries narrative ambiguity).
 The concept word is **Project**; **`job_code`** is its identifier. **Client** is the top organizing
 folder but is **not** part of a Shot's identity (it's an attribute/parent, not a spine coordinate).
+
+### Sequence inheritance — Sequence Pattern, Hoist, Override (ADR 0020)
+A **Sequence** carries a **Sequence Pattern** — the master recipe pattern every Shot is built to,
+developed on one **look-dev Shot** and **Hoisted** up — which Shots **instantiate** at Run-submit time.
+
+- **Sharing class** — every Shot input is one of three (the rule that decides what propagates):
+  - **shared-content** — one artifact, every Shot uses it (character sheet). Stored as a
+    `scope='sequence'` Asset.
+  - **shared-recipe** — same settings, each Shot **regenerates its own content** (e.g. a depth-pass —
+    nothing special, just a `control-pass` Run type auto-published no-look by the Roustabout). Stored as a
+    prototype Run in the Pattern; the consuming Role records which Run produces it
+    (`produced_by_pattern_run_id`). The class is assigned **at Hoist**.
+  - **per-shot** — different input each Shot, no sharing (audio). Stored as a `scope='shot'` Asset.
+  Shared **params** (LUT weights, CFG, model/tier/mode) act like shared-content (one inherited value).
+- **Sequence Pattern** — a **set of prototype Runs** (render, depth/control-pass, …) mirroring a Run's
+  recipe **minus per-Shot content**, each Role/param tagged with its sharing class. A Shot
+  **instantiates** it: shared-content auto-binds, shared-recipe **re-runs** for that Shot, per-shot slots
+  are flagged "you owe an input." (Named **Pattern**, not "Template/Recipe/Spec" — those are taken; not
+  "Blueprint" — avoids the Unreal collision.)
+- **Look-dev (Target) Shot** — the one Shot designated to develop and iterate the Sequence's look; an
+  ordinary Shot that also serves as the source the Pattern is Hoisted **from**. At most one per Sequence.
+- **Hoist** — the upward verb: lift an **approved** look-dev Shot's recipe **up** into the Pattern,
+  **selectively, by sharing class** — shared-content Assets and shared-recipe settings and shared params
+  go up; per-shot inputs do **not**. The look-dev Shot's now-redundant overrides for the hoisted
+  attributes are **cleared**; other non-overriding Shots inherit the change on their **next** Run. Hoist
+  never rewrites existing takes — provenance is immutable; siblings **re-run forward** (ADR 0013).
+- **Override** — a Shot setting its own value for an inherited attribute. The Shot uses its own value
+  **and** stops following later Sequence-wide changes to it (override = local value **and** shield); a
+  Hoist does not disturb a sibling that holds its own override.
+
+_Avoid_: calling Hoist a **promote** — *promote* is the **gate** verb (Version→Publish→Delivery).
+**Hoist** moves a value **up the structure** (Shot→Sequence); it does not move a take across a gate.
 
 ### Submitter
 The connective tissue of the pipeline and an **atomic tool** (ADR 0010): **ingests** a brief/recipe →
@@ -184,7 +221,9 @@ The **thin** per-Project map header (`manifest.json` at the Job root): Project *
 (`client_code`, `job_code`, `title`), the logical **`base_path`**, and **pointers** tying Git ↔ the
 Huxley store ↔ Mckenna's DB (`db_project_id`). It holds **no provenance** — all Runs/Versions/
 Publishes/Deliveries live in the **DB**, and the Episode/Sequence/Shot/Asset structure is discovered
-by walking the deterministic tree (ADR 0003). Versioned by an integer **`manifest_version`** (bump on
+by walking the deterministic tree (ADR 0003). *(Exception, ADR 0020: a **Sequence** also carries a small
+DB **config** record for its shared defaults — but its **existence** is still the tree's folder, not the
+row; the DB stores the Sequence's *settings*, never the authority on what Sequences exist.)* Versioned by an integer **`manifest_version`** (bump on
 breaking change). Schema: `schemas/manifest.schema.json`.
 
 ### Asset
@@ -214,14 +253,19 @@ folder.
 _Avoid_: making Reference or Role a folder; bind by role in **data**.
 
 ### Asset scoping
-Assets live in one of **two** homes (two-tier):
+Assets live in one of **two physical homes** (folders), but have **three binding scopes**:
 - **`<Job>/assets/`** — everything shared across shots: characters, environments, concept &
   character sheets, master audio, fonts.
 - **`<Shot>/assets/`** — shot-specific inputs only: first-/last-frame images, the shot's plate,
   shot-only references.
+- **Sequence scope** *(no folder — ADR 0020)* — an Asset whose **file** still lives flat in
+  `<Job>/assets/`, but whose DB **scope=`sequence`** auto-binds it to **every Shot in one Sequence**
+  (a Shot can override). It is a **binding scope**, not a new folder — consistent with "scope/Role is
+  metadata, not folders."
 
-There is **no** Episode- or Sequence-level asset folder; if an asset is shared beyond one Shot,
-it goes in `<Job>/assets/`. Shot **outputs** (Versions, Publishes) are **not** Assets and live
+There is **no** Episode-level asset folder and **no Sequence asset *folder***: a Sequence-shared Asset
+still lives flat in `<Job>/assets/`; only its **binding scope** says "all of SALEM's Shots." If an asset
+is shared beyond one Shot, it goes in `<Job>/assets/`. Shot **outputs** (Versions, Publishes) are **not** Assets and live
 in their own per-Shot subfolders. Assets are stored **flat** and named **descriptively** for
 what they are (e.g. `main character sheet`, `desert environment`) — not bucketed by type or role.
 An Asset's content is a **Publish** or an **Import**; the file in `assets/` is its **resolved**

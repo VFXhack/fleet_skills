@@ -2,6 +2,10 @@
 
 **Status:** Accepted
 **Date:** 2026-06-24
+**Amended by:** ADR 0020 — a Sequence now carries a small **config** record (+ a Sequence Pattern of
+prototype Runs) in this DB. The "Episode/Sequence/Shot structure is **never** stored in the DB" stance is
+relaxed for Sequence **config only** — a Sequence's *existence* still comes from walking the tree; the DB
+holds its *settings*, never the authority on what Sequences exist. Current live truth: `CONTEXT.md`.
 
 ## Context
 Branch 4. ADR 0006 left `manifest.db_project_id` **null pending this decision**, and "Mckenna's DB"

@@ -7,3 +7,6 @@ __pycache__/
 # Runner output (generated media)
 magnific_out/
 scratch_magnific/
+
+# Local prove/test scratch project root (FLEET_PROJECTS_ROOT for fleet_test runs)
+scratch_proof_root/
