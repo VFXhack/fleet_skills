@@ -54,12 +54,17 @@ Two sittings (the first ended before writing its handoff; this entry covers both
   prod DSN during testing (hardening idea from a near-miss); restyle `create-project`/`add-shot`/
   `add-sequence` to match (optional).
 
-**Single next action (START HERE): build the Cast tool** — the downward half (ADR 0020 §6 / 0021):
-at Run-submit, clone each Look Run into a real Run for a sibling Shot — auto-bind shared-content,
-**re-run** shared-recipe Look Runs for that Shot's own content (existing version→publish→bind spine +
-the Roustabout's no-look auto-publish), demand the per-shot inputs it still owes, honor Shot
-Overrides (store TBD — settle where overrides live, the ADR-0020 open). Prove vs `fleet_test` with
-`hoist_demo` (seed → hoist → cast a second Shot, e.g. `SANDBOX_EP01_SALEM_020`), per the
+**Single next action (START HERE — Andy's call, end of Session 11): GRILL the Override store first,
+then build Cast.** Cast must honor Shot Overrides, so settle the ADR-0020 open *where a Shot's
+Overrides live* before writing code — when Shot 020 says "my CFG is 4.0, not the Sequence's 3.5",
+is that (a) a new `shot_overrides` table, (b) a per-Shot config record/row, or (c) stamped into the
+Cast-created Run itself? (Remember: an Override is a local value AND a shield against later Hoists —
+option (c) alone can't shield.) One question at a time, 2–3 options + a recommendation, ADR when it
+lands. THEN **build the Cast tool** — the downward half (ADR 0020 §6 / 0021): at Run-submit, clone
+each Look Run into a real Run for a sibling Shot — auto-bind shared-content, **re-run** shared-recipe
+Look Runs for that Shot's own content (existing version→publish→bind spine + the Roustabout's no-look
+auto-publish), demand the per-shot inputs it still owes, honor Shot Overrides. Prove vs `fleet_test`
+with `hoist_demo` (seed → hoist → cast a second Shot, e.g. `SANDBOX_EP01_SALEM_020`), per the
 build-and-prove loop.
 
 ## Session 10 (2026-06-29) — Sequence Pattern model (ADR 0020) + structure tools; fleet landed
