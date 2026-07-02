@@ -2,7 +2,7 @@
 
 You are continuing a **`grill-with-docs`** (domain-modeling) effort on the `fleet-skills` repo: the
 bounded context for Andy's CG → AI video pipeline. **Read `CONTEXT.md` (the glossary / source of
-truth) and `adr/0001`–`0017` before doing anything.** Then skim **`PIPELINE.md`** (the canon flowchart:
+truth) and `adr/0001`–`0022` before doing anything.** Then skim **`PIPELINE.md`** (the canon flowchart:
 main Shot flow, the supervisor-only Asset Production sub-flow, and the system/provenance view — it
 visualizes exactly what this handoff describes). Then read the memory `andy-working-style.md`.
 
@@ -14,6 +14,53 @@ visualizes exactly what this handoff describes). Then read the memory `andy-work
   will override his own prior "LOCKED" calls; surface the trade-off first).
 - **As decisions land: update `CONTEXT.md` inline and write an ADR** in `/adr` (number sequentially,
   follow 0001's format) for any non-obvious, hard-to-reverse decision. Never leave decisions only in chat.
+
+## Session 11 (2026-06-30 → 07-02) — the Look rename + the Hoist engine: built, PROVEN, styled
+Two sittings (the first ended before writing its handoff; this entry covers both). The Session-10
+"START HERE" (the Hoist half of Hoist/Instantiate) is DONE and Andy-approved; **Cast is next**.
+- **ADR-0021 — "Sequence Pattern" renamed the Sequence Look.** Pattern tested too abstract; the Look
+  IS what you look-dev. Tables now `sequence_look_runs`/`sequence_look_bindings`, `sequences.
+  pattern_version` → `look_version`; migration rewritten as `0004_sequences_and_look.sql` (the
+  pattern-named file deleted; `fleet_test` recreated on the new schema). Verb pair: **Hoist** up /
+  **Cast** down (Cast replaces *Instantiate*; foundry sense — stamp from the master mold).
+- **ADR-0022 — Hoist is publish-driven.** It never lifts a bare Version: the anchor is a **Publish**
+  of the look-dev Shot — the **latest** by default, `--publish N` to re-anchor (the client-zigzag
+  case: notes match an older approved take). From the anchor: Publish → source Version → Run, plus
+  transitively the Runs behind **shared-recipe** inputs. To Hoist an unpublished take, `promote`
+  first (that *records* the approval). Rejected for now: `--version` promote-and-hoist sugar (blurs
+  Hoist ≠ promote).
+- **`hoist` CLI built + PROVEN vs `fleet_test`** (`fleet/hoist.py`, repository fns, entry point
+  `hoist`). Proven behaviors: the classification gate (every discovered Role demands a `--class`,
+  the deliberate class-born-at-Hoist moment); **one-round discovery** (unclassified publish-backed
+  inputs descend for *discovery only*, so round one lists ALL Roles incl. nested ones like the
+  control-pass `Source`; the lift still follows only classified shared-recipe edges); rebuild-fresh
+  + `look_version` bump; sequence-Asset **reuse** on re-Hoist (idempotent); `--publish` re-anchor;
+  clean refusals (no Publish → "promote first"; bad p-number). One txn; rollback on any failure.
+- **Fixture `db/fixtures/hoist_demo.py`** (`seed|inspect|reset|dsn`): a look-dev Shot exercising all
+  3 sharing classes (control-pass depth ← plate → p001; seed-sweep with Character-Sheet Import +
+  Depth-Pass pinned to p001 + Lipsync-Dialog; hero v003 → p002 = default anchor). `dsn` prints the
+  fleet_test DSN **from config, ignoring `$FLEET_DB_DSN`** (a stale env var once echoed itself back
+  through the old version); destructive ops PARSE the DSN and refuse `dbname != fleet_test`
+  (substring check let a garbage value through). Leary has NO psql — this module is the test-DB
+  driver there.
+- **CLI styling (Andy-requested):** new dep **`rich`**; **`fleet/style.py`** pins the visual
+  language — sharing classes color-pinned everywhere (shared-content **green**, shared-recipe
+  **cyan**, per-shot **yellow**), codes bold, Publishes magenta, `die()` = red stderr errors.
+  `hoist` plan = compact table; `inspect` = **grouped rows** (Andy picked over a wide table — long
+  paths get their own line, nothing truncates at 80 cols). Binding displays sort by Role (fixes
+  nondeterministic order — created_at ties, uuid tiebreak). Per-host venvs need `pip install -e .`
+  (or `rich`) when they first run the CLIs.
+- **Open:** the Override store (override-clearing still deferred, ADR 0020); write-tools refusing a
+  prod DSN during testing (hardening idea from a near-miss); restyle `create-project`/`add-shot`/
+  `add-sequence` to match (optional).
+
+**Single next action (START HERE): build the Cast tool** — the downward half (ADR 0020 §6 / 0021):
+at Run-submit, clone each Look Run into a real Run for a sibling Shot — auto-bind shared-content,
+**re-run** shared-recipe Look Runs for that Shot's own content (existing version→publish→bind spine +
+the Roustabout's no-look auto-publish), demand the per-shot inputs it still owes, honor Shot
+Overrides (store TBD — settle where overrides live, the ADR-0020 open). Prove vs `fleet_test` with
+`hoist_demo` (seed → hoist → cast a second Shot, e.g. `SANDBOX_EP01_SALEM_020`), per the
+build-and-prove loop.
 
 ## Session 10 (2026-06-29) — Sequence Pattern model (ADR 0020) + structure tools; fleet landed
 Grill + build session. Modeled how a Sequence shares state, then built the structure-layer tools on it.
