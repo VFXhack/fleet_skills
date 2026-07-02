@@ -156,7 +156,7 @@ flowchart TD
 
 Each internal Asset — **Character-Sheet**, **First/Last-Frame**, and **Lipsync-Dialog** (Spells), and a
 **Control-Pass** (run.type `control-pass`: depth/canny/openpose/matte, each a Spell via `spec.method`; the
-depth flavor is the hardened `depth-pass` Skill — ADR 0017) — instantiates
+depth flavor is the hardened `depth-pass` Skill — ADR 0017) — runs
 this one loop. It is the
 same Submit→Run→Version→Publish spine as a Shot, **minus the client gate**: an Asset is **approved by the
 supervisor (Andy) only**, then its **Publish** is what gets bound into a Shot Role.

@@ -2,6 +2,11 @@
 
 **Status:** Accepted
 **Date:** 2026-06-28
+**Amended by:** ADR 0021 — the **Sequence Pattern** is renamed **the Sequence Look** (and the rename is
+carried into the DB: `sequence_look_runs` / `sequence_look_bindings` / `sequences.look_version` /
+`produced_by_look_run_id`). A **prototype Run** is a **Look Run**; a **pattern binding** is a **Look
+input**; *instantiate* a Shot is **Cast** a Shot from the Look. The shape of the model is unchanged — only
+the names. The terms below are the superseded first-draft vocabulary; read them through ADR 0021's map.
 **Amends:** ADR 0003 (assets were *two-tier*; no Sequence level) and ADR 0008 / ADR 0011 (Episode/
 Sequence/Shot structure kept *out* of the DB — "Shot is a TEXT CODE, not a table"). This ADR carves a
 deliberate, narrow exception for **Sequence configuration** and introduces the **Sequence Pattern**.

@@ -1,22 +1,26 @@
 -- ============================================================================
--- 0004_sequences_and_pattern.sql — Sequence shared state + Sequence Pattern
--- (ADR 0020; amends ADR 0003 two-tier assets, ADR 0008/0011 "no structure in DB")
+-- 0004_sequences_and_look.sql — Sequence shared state + the Sequence Look
+-- (ADR 0020 / 0021; amends ADR 0003 two-tier assets, ADR 0008/0011 "no structure in DB")
 -- ============================================================================
 -- A Sequence stops being a bare folder token and gains a CONFIG record + a
--- Sequence Pattern (a set of prototype Runs every Shot is built to). Existence
--- still comes from the deterministic tree (ADR 0003) — the DB stores a Sequence's
+-- Sequence Look (a set of Look Runs every Shot is Cast from). Existence still
+-- comes from the deterministic tree (ADR 0003) — the DB stores a Sequence's
 -- SETTINGS, never the authority on which Sequences exist.
+--
+-- The Look is named "Look" (not "Pattern") because it IS what you look-dev on the
+-- look-dev Shot, then Hoist up; "Pattern" tested as too abstract (ADR 0021).
 --
 -- Three sharing classes drive what propagates (ADR 0020 §1):
 --   * shared-content  one artifact, every Shot uses it  -> assets.scope='sequence'
---   * shared-recipe   same settings, content regenerated per Shot -> a prototype Run
+--   * shared-recipe   same settings, content regenerated per Shot -> a Look Run
 --   * per-shot        different per Shot, no sharing     -> assets.scope='shot'
 --
--- NON-OBVIOUS DECISIONS (each tied to ADR 0020):
+-- NON-OBVIOUS DECISIONS (each tied to ADR 0020/0021):
 --   * sequences is CONFIG, not structure. No FK from runs/versions to it; Shots
 --     still carry shot_code text and are walked, not joined.
---   * The Pattern mirrors the runs/bindings shapes on purpose: Hoist = copy a
---     recipe UP, Instantiate = clone it DOWN (same op, two directions).
+--   * The Look mirrors the runs/bindings shapes on purpose: Hoist = copy a recipe
+--     UP, Cast = clone it DOWN (same op, two directions). Hence the table names
+--     sequence_look_runs / sequence_look_bindings mirror runs / bindings.
 --   * A Sequence Asset's FILE still lives flat in <Job>/assets/; scope='sequence'
 --     is a BINDING scope, not a new folder (ADR 0003 "scope/Role is metadata").
 -- ============================================================================
@@ -32,7 +36,7 @@ CREATE TABLE sequences (
     sequence_code      text        NOT NULL,            -- e.g. 'AWA_EP01_SALEM' (ADR 0015 form)
     title              text,
     lookdev_shot_code  text,                            -- the designated Target Shot (ADR 0020 §5); nullable
-    pattern_version    integer     NOT NULL DEFAULT 0,  -- bumped by each Hoist (ADR 0020 §7)
+    look_version       integer     NOT NULL DEFAULT 0,  -- bumped by each Hoist (ADR 0020 §7)
     created_at         timestamptz NOT NULL DEFAULT now(),
     updated_at         timestamptz NOT NULL DEFAULT now(),
     UNIQUE (project_id, sequence_code)
@@ -40,11 +44,11 @@ CREATE TABLE sequences (
 CREATE INDEX sequences_project_idx ON sequences (project_id);
 
 -- ----------------------------------------------------------------------------
--- sequence_pattern_runs — the prototype Runs of a Sequence Pattern (ADR 0020 §3).
--- Mirrors the runs authoring recipe MINUS per-Shot content (no shot_code, no
--- versions). A Shot instantiates each into a real runs row.
+-- sequence_look_runs — the Look Runs of a Sequence Look (ADR 0020 §3). Mirrors
+-- the runs authoring recipe MINUS per-Shot content (no shot_code, no versions).
+-- A Shot is Cast from the Look by cloning each Look Run into a real runs row.
 -- ----------------------------------------------------------------------------
-CREATE TABLE sequence_pattern_runs (
+CREATE TABLE sequence_look_runs (
     id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
     sequence_id   uuid        NOT NULL REFERENCES sequences(id) ON DELETE CASCADE,
     type          text        NOT NULL,                -- ADR 0014 enum (render/control-pass/upscale/...)
@@ -58,35 +62,36 @@ CREATE TABLE sequence_pattern_runs (
     ord           integer     NOT NULL DEFAULT 0,            -- order in the per-Shot chain
     created_at    timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX sequence_pattern_runs_seq_idx ON sequence_pattern_runs (sequence_id);
+CREATE INDEX sequence_look_runs_seq_idx ON sequence_look_runs (sequence_id);
 
 -- ----------------------------------------------------------------------------
--- sequence_pattern_bindings — per-Role inputs of a prototype Run, tagged with the
--- sharing class (ADR 0020 §3; class is assigned at Hoist, ADR 0020 §6). A binding
--- is sourced EXACTLY ONE of three ways, by class:
+-- sequence_look_bindings — the Look inputs of a Look Run: per-Role input slots,
+-- each tagged with its sharing class (ADR 0020 §3; class is assigned at Hoist,
+-- ADR 0020 §6). The Look's mirror of a base `bindings` row. A Look input is
+-- sourced EXACTLY ONE of three ways, by class:
 --   * shared-content -> asset_id  (a Sequence-scoped Asset; one file, every Shot)
---   * shared-recipe  -> produced_by_pattern_run_id  (another prototype Run whose
---       output feeds this Role, RE-RUN per Shot; its per-Shot take is auto-published
+--   * shared-recipe  -> produced_by_look_run_id  (another Look Run whose output
+--       feeds this Role, RE-RUN per Shot; its per-Shot take is auto-published
 --       no-look by the Roustabout, ADR 0018, then bound in — no new machinery)
 --   * per-shot       -> neither   (the Shot supplies its own input)
 -- ----------------------------------------------------------------------------
-CREATE TABLE sequence_pattern_bindings (
-    id                          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-    pattern_run_id              uuid        NOT NULL REFERENCES sequence_pattern_runs(id) ON DELETE CASCADE,
-    role                        text        NOT NULL,   -- 'Character-Sheet' | 'Depth-Pass' | 'Lipsync-Dialog' | ...
-    sharing_class               text        NOT NULL
-                                CHECK (sharing_class IN ('shared-content','shared-recipe','per-shot')),
-    asset_id                    uuid        REFERENCES assets(id) ON DELETE RESTRICT,               -- shared-content source
-    produced_by_pattern_run_id  uuid        REFERENCES sequence_pattern_runs(id) ON DELETE CASCADE, -- shared-recipe source
-    created_at                  timestamptz NOT NULL DEFAULT now(),
+CREATE TABLE sequence_look_bindings (
+    id                       uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    look_run_id              uuid        NOT NULL REFERENCES sequence_look_runs(id) ON DELETE CASCADE,
+    role                     text        NOT NULL,   -- 'Character-Sheet' | 'Depth-Pass' | 'Lipsync-Dialog' | ...
+    sharing_class            text        NOT NULL
+                             CHECK (sharing_class IN ('shared-content','shared-recipe','per-shot')),
+    asset_id                 uuid        REFERENCES assets(id) ON DELETE RESTRICT,            -- shared-content source
+    produced_by_look_run_id  uuid        REFERENCES sequence_look_runs(id) ON DELETE CASCADE, -- shared-recipe source
+    created_at               timestamptz NOT NULL DEFAULT now(),
     -- source must match class (exactly one of asset / producer / neither):
     CHECK (
-           (sharing_class = 'shared-content' AND asset_id IS NOT NULL AND produced_by_pattern_run_id IS NULL)
-        OR (sharing_class = 'shared-recipe'  AND asset_id IS NULL     AND produced_by_pattern_run_id IS NOT NULL)
-        OR (sharing_class = 'per-shot'       AND asset_id IS NULL     AND produced_by_pattern_run_id IS NULL)
+           (sharing_class = 'shared-content' AND asset_id IS NOT NULL AND produced_by_look_run_id IS NULL)
+        OR (sharing_class = 'shared-recipe'  AND asset_id IS NULL     AND produced_by_look_run_id IS NOT NULL)
+        OR (sharing_class = 'per-shot'       AND asset_id IS NULL     AND produced_by_look_run_id IS NULL)
     )
 );
-CREATE INDEX sequence_pattern_bindings_run_idx ON sequence_pattern_bindings (pattern_run_id);
+CREATE INDEX sequence_look_bindings_run_idx ON sequence_look_bindings (look_run_id);
 
 -- ----------------------------------------------------------------------------
 -- assets — add the Sequence binding scope (ADR 0020 §4). Three scopes now; the

@@ -75,10 +75,10 @@ gets a folder root, a `manifest.json`, and a `CONTEXT.md`, and is created via `c
 - **Episode** — an installment within a Job. **Always present** as a level, even for
   single-episode Jobs (one-offs get one Episode).
 - **Sequence** — a named group of Shots within an Episode (e.g. `SALEM`, `JUGDEAD`, `TITLE`) that
-  **carries a Sequence Pattern its Shots inherit live** (shared LUT/CFG/workflow params, shared
-  Asset→Role bindings, and re-runnable recipes like the depth-pass). A Shot may **override** an inherited
+  **carries a Sequence Look its Shots are built to** (shared LUT/CFG/workflow params, shared
+  Asset→Role inputs, and re-runnable recipes like the depth-pass). A Shot may **override** an inherited
   value locally; an approved change on the **look-dev Shot** is **Hoisted** up to the Sequence so siblings
-  inherit it. Backed by a small `sequences` config record + Pattern in the DB (ADR 0020) — but a
+  adopt it. Backed by a small `sequences` config record + the Look in the DB (ADR 0020/0021) — but a
   Sequence's *existence* is still its folder in the tree, not the row. See *Sequence inheritance*.
 - **Shot** — the atomic unit of production: one continuous gen-AI video segment, the thing a
   **Run** acts on. Coded `JOB_EP_SEQ_SHOT` (e.g. `AWA_EP01_SALEM_010`) — the Episode token is
@@ -90,37 +90,53 @@ _Avoid_: **Show** (use *Episode*), **Scene** (use *Sequence* — "scene" carries
 The concept word is **Project**; **`job_code`** is its identifier. **Client** is the top organizing
 folder but is **not** part of a Shot's identity (it's an attribute/parent, not a spine coordinate).
 
-### Sequence inheritance — Sequence Pattern, Hoist, Override (ADR 0020)
-A **Sequence** carries a **Sequence Pattern** — the master recipe pattern every Shot is built to,
-developed on one **look-dev Shot** and **Hoisted** up — which Shots **instantiate** at Run-submit time.
+### Sequence inheritance — the Sequence Look, Hoist, Override (ADR 0020/0021)
+A **Sequence** carries a **Sequence Look** — the master recipe developed on one **look-dev Shot** and
+**Hoisted** up, which each other Shot is **Cast from** at Run-submit time. **Hoist** lifts a look **up**;
+**Cast** stamps a Shot **down** from it (the up/down pair).
 
 - **Sharing class** — every Shot input is one of three (the rule that decides what propagates):
   - **shared-content** — one artifact, every Shot uses it (character sheet). Stored as a
     `scope='sequence'` Asset.
   - **shared-recipe** — same settings, each Shot **regenerates its own content** (e.g. a depth-pass —
     nothing special, just a `control-pass` Run type auto-published no-look by the Roustabout). Stored as a
-    prototype Run in the Pattern; the consuming Role records which Run produces it
-    (`produced_by_pattern_run_id`). The class is assigned **at Hoist**.
+    **Look Run** in the Look; the consuming Role records which Look Run produces it
+    (`produced_by_look_run_id`). The class is assigned **at Hoist**.
   - **per-shot** — different input each Shot, no sharing (audio). Stored as a `scope='shot'` Asset.
   Shared **params** (LUT weights, CFG, model/tier/mode) act like shared-content (one inherited value).
-- **Sequence Pattern** — a **set of prototype Runs** (render, depth/control-pass, …) mirroring a Run's
-  recipe **minus per-Shot content**, each Role/param tagged with its sharing class. A Shot
-  **instantiates** it: shared-content auto-binds, shared-recipe **re-runs** for that Shot, per-shot slots
-  are flagged "you owe an input." (Named **Pattern**, not "Template/Recipe/Spec" — those are taken; not
-  "Blueprint" — avoids the Unreal collision.)
-- **Look-dev (Target) Shot** — the one Shot designated to develop and iterate the Sequence's look; an
-  ordinary Shot that also serves as the source the Pattern is Hoisted **from**. At most one per Sequence.
-- **Hoist** — the upward verb: lift an **approved** look-dev Shot's recipe **up** into the Pattern,
+- **Sequence Look** — a **set of Look Runs** (render, depth/control-pass, …) mirroring a Run's recipe
+  **minus per-Shot content**, each input/param tagged with its sharing class. **Casting** a Shot from the
+  Look clones it down: shared-content auto-binds, shared-recipe **re-runs** for that Shot, per-shot slots
+  are flagged "you owe an input." Named **the Look** because it *is* what you look-dev on the
+  look-dev Shot — concrete where "Pattern" was abstract (ADR 0021).
+  - **Look Run** — one prototype Run inside the Look (the LTX render, the depth `control-pass`, …): a
+    `runs`-shaped authoring recipe with no `shot_code` and no Versions, cloned into a real Run per Shot.
+  - **Look input** — one input slot of a Look Run, tagged with its sharing class: the Look's mirror of a
+    base `bindings` row (table `sequence_look_bindings`).
+- **Look-dev (Target) Shot** — the one Shot designated to develop and iterate the Sequence's Look; an
+  ordinary Shot that also serves as the source the Look is Hoisted **from**. At most one per Sequence.
+- **Hoist** — the upward verb: lift an **approved** look-dev Shot's recipe **up** into the Look,
   **selectively, by sharing class** — shared-content Assets and shared-recipe settings and shared params
-  go up; per-shot inputs do **not**. The look-dev Shot's now-redundant overrides for the hoisted
-  attributes are **cleared**; other non-overriding Shots inherit the change on their **next** Run. Hoist
-  never rewrites existing takes — provenance is immutable; siblings **re-run forward** (ADR 0013).
+  go up; per-shot inputs do **not**. **Publish-driven** (ADR 0022): Hoist anchors on an approved
+  **Publish** of the look-dev Shot — the **latest** by default, or a chosen `p###` (`--publish`) — and
+  lifts the recipe **behind** it (the anchor Run + the Runs producing its shared-recipe inputs). *Only
+  approved (published) takes can be Hoisted*; to Hoist an older take, **promote** it first (that records
+  the approval — the Version keeps its number, nothing re-renders). The look-dev Shot's now-redundant
+  overrides for the hoisted attributes are **cleared**; other non-overriding Shots adopt the change on
+  their **next** Run. Hoist never rewrites existing takes — provenance is immutable; siblings **re-run
+  forward** (ADR 0013). Each Hoist bumps the Sequence's `look_version`.
+- **Cast** — the downward verb (mirror of Hoist): **Cast a Shot from the Look** at Run-submit — clone each
+  Look Run into a real Run for the Shot, auto-bind its shared-content, **re-run** its shared-recipe Look
+  Runs for this Shot, and **demand** the per-shot inputs it still owes; a Shot **Override** wins over the
+  inherited value. The foundry sense — stamp a copy from the master mold. Pairs: **Hoist** up / **Cast** down.
 - **Override** — a Shot setting its own value for an inherited attribute. The Shot uses its own value
   **and** stops following later Sequence-wide changes to it (override = local value **and** shield); a
   Hoist does not disturb a sibling that holds its own override.
 
-_Avoid_: calling Hoist a **promote** — *promote* is the **gate** verb (Version→Publish→Delivery).
-**Hoist** moves a value **up the structure** (Shot→Sequence); it does not move a take across a gate.
+_Avoid_: **Sequence Pattern**, **prototype Run**, **pattern binding**, *instantiate* and *build (a Shot)
+to the Look* — the abstract/clunky first-draft names, renamed to **the Look** / **Look Run** / **Look
+input** / **Cast (a Shot from the Look)** (ADR 0021). Also _avoid_ calling Hoist a **promote** — *promote* is the **gate** verb
+(Version→Publish→Delivery); **Hoist** moves a value **up the structure** (Shot→Sequence), not across a gate.
 
 ### Submitter
 The connective tissue of the pipeline and an **atomic tool** (ADR 0010): **ingests** a brief/recipe →

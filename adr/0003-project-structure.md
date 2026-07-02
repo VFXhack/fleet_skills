@@ -5,8 +5,8 @@
 **Amended by:** ADR 0015 — the Shot code includes the Episode token (`JOB_EP_SEQ_SHOT`,
 `AWA_EP01_SALEM_010`); the `JOB_SEQUENCE_SHOT` / `AWA_SALEM_010` / `<JOB_SEQ_SHOT>` examples below predate
 that resolution.
-**Amended by:** ADR 0020 — assets gain a **third binding scope (`sequence`)** and a Sequence gains a
-**config record + Sequence Pattern**; the *two-tier assets / no Sequence-level* decision below is
+**Amended by:** ADR 0020 (+ ADR 0021 rename) — assets gain a **third binding scope (`sequence`)** and a
+Sequence gains a **config record + Sequence Look**; the *two-tier assets / no Sequence-level* decision below is
 **superseded for Sequences** (the Sequence file still lives flat in `<Job>/assets/` — it is a binding
 scope, not a new folder). Current live truth: `CONTEXT.md`.
 
