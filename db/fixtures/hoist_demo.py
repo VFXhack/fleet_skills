@@ -13,9 +13,16 @@ one of each to lift:
         Lipsync-Dialog  -> shot Asset 'salem 010 dialog' (Import)
         -> v002, v003 (landed); hero v003 promoted -> p002 (latest Publish)
 
+The seed also registers sibling-Shot 020's own per-shot inputs (its plate +
+dialog Assets), so a `cast` of SANDBOX_EP01_SALEM_020 has --input material.
+
 Usage (from the repo root, venv python):
   python -m db.fixtures.hoist_demo seed      # insert the fixture (refuses if present)
   python -m db.fixtures.hoist_demo inspect   # dump the Sequence Look Hoist wrote
+  python -m db.fixtures.hoist_demo land SANDBOX_EP01_SALEM_020
+                                             # simulate farm + Roustabout: land a take for
+                                             #   each cast control-pass Run of that Shot
+                                             #   with none, and auto-publish it no-look
   python -m db.fixtures.hoist_demo reset     # TRUNCATE every table (fleet_test only)
   python -m db.fixtures.hoist_demo dsn       # print the resolved fleet_test DSN, for
                                              #   $env:FLEET_DB_DSN (test_db.sh dsn twin)
@@ -41,8 +48,9 @@ from fleet.style import DIM, cls, console, die
 
 TEST_DB = "fleet_test"
 SHOT = "SANDBOX_EP01_SALEM_010"
+SHOT2 = "SANDBOX_EP01_SALEM_020"
 SEQ = "SANDBOX_EP01_SALEM"
-TABLES = ("deliveries", "publishes", "versions", "bindings",
+TABLES = ("deliveries", "publishes", "versions", "bindings", "shot_overrides",
           "sequence_look_bindings", "sequence_look_runs", "sequences",
           "assets", "runs", "events", "projects")
 
@@ -160,10 +168,19 @@ def cmd_seed() -> None:
             "VALUES (%s,%s,2,'fleet:/projects/TEST/SANDBOX/EP01/SALEM/010/publishes/p002_hero.mp4')",
             (last_version, SHOT))
 
+        # sibling Shot 020's own per-shot inputs, so a `cast` has --input material
+        for name, fname in (("salem 020 plate", "plate.mov"), ("salem 020 dialog", "dialog.wav")):
+            conn.execute(
+                "INSERT INTO assets (project_id, scope, shot_code, name, import_uri) "
+                "VALUES (%s,'shot',%s,%s,%s)",
+                (project_id, SHOT2, name,
+                 f"fleet:/projects/TEST/SANDBOX/EP01/SALEM/020/assets/{fname}"))
+
         conn.commit()
         print(f"seeded: project TEST/SANDBOX, sequence {SEQ} (look-dev {SHOT})")
         print("  p001 = depth control-pass publish (v001)")
         print("  p002 = hero render publish (v003)  <- latest = default Hoist anchor")
+        print(f"  {SHOT2}: own plate + dialog assets registered (cast --input material)")
     finally:
         conn.close()
 
@@ -233,6 +250,50 @@ def cmd_inspect() -> None:
         conn.close()
 
 
+def cmd_land(shot_code: str) -> None:
+    """Simulate the render farm + the Roustabout for a cast Shot: every cast
+    control-pass Run of the Shot that has no versions gets one landed take
+    (a fake but addressable render) and its no-look auto-publish (ADR 0018:
+    control-pass AND version_count==1 -> auto-publish). Creative runs (the
+    seed-sweep) are deliberately NOT touched — picking a take is judgment."""
+    conn = psycopg.connect(assert_test(resolve_dsn()), row_factory=dict_row)
+    try:
+        runs = conn.execute(
+            "SELECT r.id, r.type FROM runs r "
+            "WHERE r.shot_code=%s AND r.cast_from IS NOT NULL AND r.type='control-pass' "
+            "  AND NOT EXISTS (SELECT 1 FROM versions v WHERE v.run_id = r.id) "
+            "ORDER BY r.created_at", (shot_code,)).fetchall()
+        if not runs:
+            die(f"nothing to land: {shot_code} has no cast control-pass Run without "
+                f"a take (cast it first, or it already landed)")
+        for r in runs:
+            v_num = conn.execute(
+                "SELECT COALESCE(MAX(number),0)+1 AS n FROM versions WHERE shot_code=%s",
+                (shot_code,)).fetchone()["n"]
+            vid = conn.execute(
+                "INSERT INTO versions (run_id, shot_code, number, stage, frozen_submission, address) "
+                "VALUES (%s,%s,%s,'render',%s,%s) RETURNING id",
+                (r["id"], shot_code, v_num, Json({"simulated": True}),
+                 f"huxley:/renders/SANDBOX/{shot_code}/v{v_num:03d}_depth.mp4"),
+            ).fetchone()["id"]
+            p_num = conn.execute(
+                "SELECT COALESCE(MAX(number),0)+1 AS n FROM publishes WHERE shot_code=%s",
+                (shot_code,)).fetchone()["n"]
+            conn.execute(
+                "INSERT INTO publishes (source_version_id, shot_code, number, path) "
+                "VALUES (%s,%s,%s,%s)",
+                (vid, shot_code, p_num,
+                 f"fleet:/projects/TEST/SANDBOX/EP01/SALEM/020/publishes/p{p_num:03d}_depth.mp4"))
+            console.print(
+                f"landed [bold]{shot_code}[/] {r['type']}: v{v_num:03d} -> "
+                f"auto-published p{p_num:03d} [dim](as the Roustabout would, no-look)[/]",
+                highlight=False)
+        conn.commit()
+        console.print("[dim]next: re-run the same `cast` - it binds what is now possible.[/]")
+    finally:
+        conn.close()
+
+
 def cmd_reset() -> None:
     conn = psycopg.connect(assert_test(resolve_dsn()))
     try:
@@ -249,6 +310,9 @@ def cmd_dsn() -> None:
 
 if __name__ == "__main__":
     cmds = {"seed": cmd_seed, "inspect": cmd_inspect, "reset": cmd_reset, "dsn": cmd_dsn}
-    if len(sys.argv) != 2 or sys.argv[1] not in cmds:
-        sys.exit(f"usage: python -m db.fixtures.hoist_demo {{{'|'.join(cmds)}}}")
-    cmds[sys.argv[1]]()
+    if len(sys.argv) == 3 and sys.argv[1] == "land":
+        cmd_land(sys.argv[2])
+    elif len(sys.argv) == 2 and sys.argv[1] in cmds:
+        cmds[sys.argv[1]]()
+    else:
+        sys.exit(f"usage: python -m db.fixtures.hoist_demo {{{'|'.join(cmds)}}} | land <shot_code>")

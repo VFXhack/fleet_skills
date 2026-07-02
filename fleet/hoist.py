@@ -24,8 +24,12 @@ To Hoist a take that isn't published yet, `promote` it first — that records th
 approval as a Publish (the Version keeps its number; nothing re-renders). Then it
 is the latest Publish, or target it with --publish.
 
-DEFERRED (ADR 0020 Open): clearing the look-dev Shot's now-redundant Overrides —
-there is no Override store yet. Hoist never rewrites existing takes (ADR 0013).
+The look-dev Shot's now-redundant Overrides are cleared (ADR 0020 §6 / 0023):
+every attribute just hoisted (a lifted Run's param keys + input Roles, by
+run_type) IS the Look's value now, so that Shot's override rows for them are
+deleted — it returns to inheriting. Surgical: overrides on attributes not part
+of the hoisted recipe survive, and sibling Shots' Overrides are never touched
+(the shield). Hoist never rewrites existing takes (ADR 0013).
 """
 
 from __future__ import annotations
@@ -245,6 +249,18 @@ def main(argv: list[str] | None = None) -> int:
                     )
                 n_inputs[klass] += 1
 
+        # The look-dev Shot's overrides for what was just hoisted are now the
+        # Look's own values — clear them (ADR 0020 §6 / 0023). Siblings untouched.
+        params_by_type: dict = {}
+        roles_by_type: dict = {}
+        for r in runs:
+            params_by_type.setdefault(r["type"], set()).update((r["params"] or {}).keys())
+            roles_by_type.setdefault(r["type"], set()).update(
+                b["role"] for b in bindings_by_run[r["id"]])
+        cleared = repository.clear_hoisted_overrides(
+            conn, sequence_id=sequence_id, shot_code=lookdev_shot_code,
+            params_by_type=params_by_type, roles_by_type=roles_by_type)
+
         new_version = repository.bump_look_version(conn, sequence_id)
         conn.commit()
     except SystemExit:
@@ -268,9 +284,14 @@ def main(argv: list[str] | None = None) -> int:
         f"  {cls('shared-recipe')}    : {n_inputs['shared-recipe']}\n"
         f"  {cls('per-shot')}         : {n_inputs['per-shot']}",
         highlight=False)
+    if cleared:
+        console.print(
+            f"  cleared          : {cleared} now-redundant override(s) on "
+            f"[bold]{lookdev_shot_code}[/] [dim](they became the Look's values - ADR 0023)[/]",
+            highlight=False)
     console.print(
-        "\n[dim]Note: Override-clearing deferred (no Override store yet - ADR 0020 Open).[/]\n"
-        "[dim]next: Cast a sibling Shot from the Look (build the Cast tool), or re-Hoist to revise.[/]")
+        "\n[dim]next: `cast` a sibling Shot from the Look, or re-Hoist to revise. "
+        "Sibling Overrides were not touched (the shield).[/]")
     return 0
 
 

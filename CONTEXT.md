@@ -5,7 +5,12 @@
 > It is the source of truth for what words *mean*. Keep it tight. Sharpen terms here
 > via `grill-with-docs` sessions; record non-obvious decisions as ADRs in `/adr`.
 >
-> **Status:** v0.8 (2026-06-26) — Session 7. (1) Generalized `depth-pass` → **`control-pass`**: depth,
+> **Status:** v0.9 (2026-07-02) — Session 12: the **Override store** lands — `shot_overrides`, one row
+> per overridden attribute, keyed by stable codes (never `look_run_id`); `override set|list|clear` CLI;
+> Cast reads it, Hoist clears the look-dev Shot's now-redundant rows (ADR 0023, settling the ADR 0020
+> Open). Sessions 10–11 canon (this header had lagged): the **Sequence Look** + sharing classes +
+> **Hoist**/**Cast** (ADR 0020, renamed by 0021), publish-driven rebuild-fresh Hoist (ADR 0022).
+> Prior Session-7 canon: (1) Generalized `depth-pass` → **`control-pass`**: depth,
 > canny, openpose, mattes are **one run.type**, flavored by a **Spell** via `spec.method`, each bound in a
 > per-kind **Role** (ADR 0017, amending 0014/0016). (2) Pinned the **Roustabout `FLOWS`**: two-tier
 > reactions (per-take + a per-run completion barrier), **bounded auto-publish** (control-pass + single-output
@@ -131,7 +136,14 @@ A **Sequence** carries a **Sequence Look** — the master recipe developed on on
   inherited value. The foundry sense — stamp a copy from the master mold. Pairs: **Hoist** up / **Cast** down.
 - **Override** — a Shot setting its own value for an inherited attribute. The Shot uses its own value
   **and** stops following later Sequence-wide changes to it (override = local value **and** shield); a
-  Hoist does not disturb a sibling that holds its own override.
+  Hoist does not disturb a sibling that holds its own override. **Lives in `shot_overrides`** (ADR 0023):
+  one row per overridden attribute, in two forms — a **param override** (`param_key`+`param_value`,
+  merged over the Look Run's params at Cast, override wins) or a **binding override** (`role`+`asset_id`,
+  the Shot's own Asset bound instead of the inherited source). Keyed by **stable codes**
+  (`sequence_id, shot_code, run_type, param_key|role`) — never `look_run_id`, which rebuild-fresh Hoist
+  (ADR 0022) would orphan. Managed with the **`override` CLI** (`set|list|clear`); clearing = "start
+  following the Sequence again". Hoist deletes the **look-dev Shot's** rows for attributes it just
+  hoisted (they became the Look's value); sibling rows are never touched.
 
 _Avoid_: **Sequence Pattern**, **prototype Run**, **pattern binding**, *instantiate* and *build (a Shot)
 to the Look* — the abstract/clunky first-draft names, renamed to **the Look** / **Look Run** / **Look

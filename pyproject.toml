@@ -10,6 +10,8 @@ create-project = "fleet.cli:main"
 add-shot = "fleet.add_shot:main"
 add-sequence = "fleet.add_sequence:main"
 hoist = "fleet.hoist:main"
+cast = "fleet.cast:main"
+override = "fleet.override:main"
 magnific-gen = "fleet.runners.magnific:main"
 
 [build-system]

@@ -15,6 +15,52 @@ visualizes exactly what this handoff describes). Then read the memory `andy-work
 - **As decisions land: update `CONTEXT.md` inline and write an ADR** in `/adr` (number sequentially,
   follow 0001's format) for any non-obvious, hard-to-reverse decision. Never leave decisions only in chat.
 
+## Session 12 (2026-07-02) — the Override store (ADR 0023) + the Cast engine: built, PROVEN
+The Session-11 "START HERE" is DONE: grilled the Override store (one AskUserQuestion round; Andy
+picked the recommended option), landed it, then built + proved Cast. Andy has NOT yet driven the
+tools himself (he went AFK mid-session) — the build-and-prove loop's "Andy tests" step is pending.
+- **ADR-0023 — the Override store is a `shot_overrides` table** (settles the ADR-0020 Open): one row
+  per overridden attribute, TWO forms (param `param_key`+`param_value` / binding `role`+`asset_id`,
+  CHECK-enforced, two partial unique indexes). **Keyed by stable codes** (`sequence_id, shot_code,
+  run_type, param_key|role`) — NEVER `look_run_id`, which rebuild-fresh Hoist (ADR 0022) would
+  orphan. `run_type` = the Look Run's stable identity across re-Hoists. The operator surface is a
+  standalone **`override` CLI** (`set|list|clear`) — chosen over `cast --set` sugar (Andy was AFK;
+  recommended option applied, veto welcome). CONTEXT updated (status → v0.9; the header had lagged
+  at v0.8/Session 7 — Sessions 10–11 canon folded in).
+- **Migration `0005_shot_overrides.sql`** (applied to `fleet_test`; CHECK + both partial uniques
+  verified): `shot_overrides` + **`runs.cast_from` jsonb** — the Cast provenance breadcrumb
+  `{sequence_code, look_version, ord}` (ADR 0020 §7 "which Look version made this?"), codes not
+  uuids for the same rebuild-fresh reason. **Prod `fleet` on Mckenna is still at migration 0003** —
+  0004+0005 must be applied there before any of this touches prod.
+- **`cast` CLI built + PROVEN vs `fleet_test`** (`fleet/cast.py`, repository fns, entry points
+  `cast` + `override`). Semantics: clone each Look Run into a real Run (params = Look ⊕ overrides,
+  override wins), auto-bind shared-content (binding override re-points to the Shot's own Asset),
+  **demand per-shot inputs** (`--input Role='asset name'`; ALL missing Roles listed in one round,
+  like hoist's class gate), and shared-recipe Roles bind **convergently**: the producer Look Run is
+  cloned too, and once its per-Shot take lands + publishes, **re-running the same `cast` binds it**
+  (idempotent — never duplicates, only completes). One txn; `--dry-run`; casting at a NEW
+  look_version creates a fresh Run generation (forward-only, ADR 0013).
+- **Hoist now clears the look-dev Shot's now-redundant overrides** (the deferred ADR-0020 §6
+  clause): surgical — only attributes present in the lifted params/roles per run_type; PROVEN
+  (010's `cfg` cleared, its non-hoisted `denoise` survived, sibling 020's rows untouched).
+- **Proven end-to-end** (fixture `hoist_demo`, new `land <shot>` cmd simulates farm + Roustabout
+  no-look auto-publish for cast control-pass Runs; seed now registers Shot 020's plate+dialog):
+  seed → overrides → hoist (clearing ✓) → cast 020 (demand gate ✓, cfg=4.0 honored ✓, Character-Sheet
+  → sequence Asset ✓, Depth-Pass waiting ✓) → land → re-cast (binds own p001 ✓) → re-cast (no-op ✓)
+  → binding override + re-Hoist → re-cast at look_version 2 (NEW generation, BOTH overrides honored
+  — the shield ✓) → `override clear` (follows the Sequence again ✓).
+- **Open:** Andy drives the usage card (approval gates prime time); apply 0004+0005 to prod;
+  write-tools refusing a prod DSN during testing (Session-11 hardening idea, still open); restyle
+  `create-project`/`add-shot`/`add-sequence` (optional); per-shot `--input` re-demanded every
+  generation (fine for now — could persist as declared inputs later if it annoys).
+
+**Single next action (START HERE): Andy test-drives `override` + `cast` via the usage card**
+(end of the Session-12 chat log; the fixture recipe is in `db/fixtures/hoist_demo.py`'s docstring).
+On his approval, the natural next build is the **Submitter ingest/expand/dispatch slice**: Cast
+creates authored Runs, but nothing yet validates/expands `spec` into Versions or dispatches to a
+Runner — that's the front half that makes a cast Shot actually render (and lets the real Roustabout,
+not the fixture's `land`, complete the convergence).
+
 ## Session 11 (2026-06-30 → 07-02) — the Look rename + the Hoist engine: built, PROVEN, styled
 Two sittings (the first ended before writing its handoff; this entry covers both). The Session-10
 "START HERE" (the Hoist half of Hoist/Instantiate) is DONE and Andy-approved; **Cast is next**.

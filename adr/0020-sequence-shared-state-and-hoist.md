@@ -164,7 +164,8 @@ shield). A Hoist does not disturb a sibling that holds its own override of the h
 
 ## Open (settle when building; not blockers)
 - **Where a Shot's overrides live** — likely a `shot_overrides` home mirroring the Pattern, or carried on
-  the Shot's authoring at run time. Decide with `add-shot`.
+  the Shot's authoring at run time. Decide with `add-shot`. **Settled by ADR 0023:** a dedicated
+  `shot_overrides` table, one row per overridden attribute, keyed by stable codes (never `look_run_id`).
 - **`sequence_code` form** — proposed `JOB_EP_SEQ` (`AWA_EP01_SALEM`), mirroring ADR 0015.
 - **Pattern provenance breadcrumb** — optionally record which Shot+take each Pattern value was Hoisted from.
 - **Execution ordering of the prototype-Run chain** — `produced_by_pattern_run_id` now gives an explicit
