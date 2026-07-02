@@ -15,10 +15,12 @@ visualizes exactly what this handoff describes). Then read the memory `andy-work
 - **As decisions land: update `CONTEXT.md` inline and write an ADR** in `/adr` (number sequentially,
   follow 0001's format) for any non-obvious, hard-to-reverse decision. Never leave decisions only in chat.
 
-## Session 12 (2026-07-02) — the Override store (ADR 0023) + the Cast engine: built, PROVEN
+## Session 12 (2026-07-02) — the Override store (ADR 0023) + the Cast engine: built, PROVEN, APPROVED
 The Session-11 "START HERE" is DONE: grilled the Override store (one AskUserQuestion round; Andy
-picked the recommended option), landed it, then built + proved Cast. Andy has NOT yet driven the
-tools himself (he went AFK mid-session) — the build-and-prove loop's "Andy tests" step is pending.
+picked the recommended option), landed it, then built + proved Cast. **Andy drove the full card
+himself and approved — `cast` + `override` are prime time** (his one gotcha: the tools need the
+venv activated or a `.venv\Scripts\` prefix; his one question: `land` — confirmed fixture-only
+theater for farm+Roustabout, refuses non-fleet_test DSNs).
 - **ADR-0023 — the Override store is a `shot_overrides` table** (settles the ADR-0020 Open): one row
   per overridden attribute, TWO forms (param `param_key`+`param_value` / binding `role`+`asset_id`,
   CHECK-enforced, two partial unique indexes). **Keyed by stable codes** (`sequence_id, shot_code,
@@ -49,17 +51,22 @@ tools himself (he went AFK mid-session) — the build-and-prove loop's "Andy tes
   → sequence Asset ✓, Depth-Pass waiting ✓) → land → re-cast (binds own p001 ✓) → re-cast (no-op ✓)
   → binding override + re-Hoist → re-cast at look_version 2 (NEW generation, BOTH overrides honored
   — the shield ✓) → `override clear` (follows the Sequence again ✓).
-- **Open:** Andy drives the usage card (approval gates prime time); apply 0004+0005 to prod;
-  write-tools refusing a prod DSN during testing (Session-11 hardening idea, still open); restyle
+- **New: `db/apply_migrations.py`** — the prod-capable migration runner (the fixtures are
+  fleet_test-only by design): prints target + per-migration applied/MISSING status (probed by
+  marker relations), applies nothing without `--yes`, applies missing ones in ledger order.
+  Status mode proven vs fleet_test. Built because the auto-mode permission classifier (correctly)
+  refused agent-side prod DB access — **prod applies are run by Andy's own hand**.
+- **Open:** apply 0004+0005 to prod `fleet` (Andy runs `python -m db.apply_migrations --yes`
+  with no FLEET_DB_DSN set — was queued at end of Session 12, confirm it happened); write-tools
+  refusing a prod DSN during testing (Session-11 hardening idea, still open); restyle
   `create-project`/`add-shot`/`add-sequence` (optional); per-shot `--input` re-demanded every
   generation (fine for now — could persist as declared inputs later if it annoys).
 
-**Single next action (START HERE): Andy test-drives `override` + `cast` via the usage card**
-(end of the Session-12 chat log; the fixture recipe is in `db/fixtures/hoist_demo.py`'s docstring).
-On his approval, the natural next build is the **Submitter ingest/expand/dispatch slice**: Cast
-creates authored Runs, but nothing yet validates/expands `spec` into Versions or dispatches to a
-Runner — that's the front half that makes a cast Shot actually render (and lets the real Roustabout,
-not the fixture's `land`, complete the convergence).
+**Single next action (START HERE): build the Submitter ingest/expand/dispatch slice.** Cast is
+approved and creates authored Runs, but nothing yet validates/expands `spec` into Versions
+(ADR 0016) or dispatches to a Runner — that's the front half that makes a cast Shot actually
+render (and lets the real Roustabout, not the fixture's `land`, complete the convergence).
+Grill the ingest shape first per the loop; check prod is at migration 0005 before any prod writes.
 
 ## Session 11 (2026-06-30 → 07-02) — the Look rename + the Hoist engine: built, PROVEN, styled
 Two sittings (the first ended before writing its handoff; this entry covers both). The Session-10
