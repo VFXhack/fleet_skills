@@ -15,6 +15,54 @@ visualizes exactly what this handoff describes). Then read the memory `andy-work
 - **As decisions land: update `CONTEXT.md` inline and write an ADR** in `/adr` (number sequentially,
   follow 0001's format) for any non-obvious, hard-to-reverse decision. Never leave decisions only in chat.
 
+## Session 13 (2026-07-06) — the Submitter front half: expand (APPROVED) + dry dispatch-spec
+Grill + build. Settled the Submitter's boundary, then built its front half in provable increments.
+Committed `8628a4d` on `main`, pushed to origin. **Host fan-out deferred** (Andy's call — dev-box +
+`fleet_test` only for now; pull to Mckenna/Huxley/Ramdass/Watts + `pip install -e .` when prime-time).
+- **ADR 0024 — the Submitter has ONE job: submit an already-authored Run by id.** It does NOT author
+  (Cast / a future direct-author tool / fixtures do — a *family* of front-ends that all feed it a
+  `run_id`) and does NOT orchestrate (Roustabout). Grilled with Andy over several rounds; his framing
+  locked it: *"what does the submitter do? It submits a unique run. That's all."* **Validation is its
+  own separate stamping gate** (Andy's design): a future `validate` tool stamps a Run at authoring time;
+  any consumer (cast/promote/submit) calls it; since **Runs are immutable** (nothing does `UPDATE runs`;
+  an Override never edits a Run — it re-casts to a new run_id) the stamp never goes stale. The Submitter
+  only CHECKS the stamp (a marked seam for now — the validator + Template store don't exist yet).
+- **Increment 1 — `expand` (built, PROVEN vs `fleet_test`, Andy-APPROVED).** `submit <run_id>` loads a
+  Run, checks the validation stamp (seam), expands `spec` → N Versions (ADR 0016). `submitter/expand.py`
+  = the **pure** per-type expander (seed-sweep/prompt-variation/xy-plot/refine/comp/upscale/control-pass;
+  range sugar → explicit values; the 2×4=8 grid verified). `write_versions` (`submitter/writes.py`)
+  allocates the per-Shot `v###` counter like `promote` does `p###`, refuses double-expand.
+  `frozen_submission = params ⊕ delta` (provisional — the Template-resolved payload comes later).
+  `submitter/submit_demo.py` authors a bare spec-bearing Run (the authoring stand-in until Cast threads
+  spec). Andy drove it, confirmed "0 versions" on a fresh Run is correct (authoring makes the recipe;
+  the Submitter makes the Versions), and approved.
+- **Increment 2a — dry dispatch-spec (built, self-PROVEN, NOT yet live-tested by Andy).** `dispatch
+  <run_id>` (`submitter/dispatch.py`) translates each Version → the concrete Magnific Runner request it
+  WOULD send, resolving what it can and surfacing Template-shaped holes; **no spend, no writes** (Andy
+  chose dry-first over full-sync). Proven: fixture i2v run → 2/2 routed to `ltx-2-fast` (prompt+seed+
+  image_url from Character-Sheet); control-pass/depthcrafter → NOT ROUTED (clear reason); demo run →
+  routed but flags `prompt`/`image_url`/`cfg,lut` unresolved. `MODEL_ALIASES` + `IMAGE_ROLE_PRIORITY` +
+  `PASSTHROUGH_KNOBS` are **proto-Template seams** (the real knob→slot map is the Spellbook Template).
+  New `repository.get_run_bindings()`. Entry points `submit` + `dispatch` (added `submitter` to the
+  packaged list in pyproject; needs `pip install -e .` on each host at fan-out).
+- **Two authoring-layer gaps surfaced + logged** (NOT the Submitter's to fix — see the two "Open (NEW,
+  Session 13…)" bullets under Session 12's Open list): (1) **per-shot forward re-cast** — `cast` won't
+  mint a new Run when an Override changes AFTER a Shot is already cast at the current look_version (the
+  "make Salem's eye glow red" scenario; `cast.py:159–175` converges only); needs a per-Shot gen counter
+  in `cast_from`. (2) **`spec` is threaded nowhere** through Hoist/Cast — a cast Run has `spec='{}'`;
+  Hoist likely captures the approved take's frozen params as the Look's spec (design Q, not just plumbing).
+- **CONTEXT.md updated:** the Submitter entry now states single-responsibility + validation-as-separate-
+  gate + what's built (ADR 0024), with matching `_Avoid_`. `submitter/__init__.py` docstring refreshed.
+
+**Single next action (START HERE): live-test dry dispatch with Andy → then build Increment 2b (real
+dispatch).** First hand Andy the dry `dispatch` card (drive the fixture hero run for a clean route + a
+demo run for the exposed holes) and get his approval / mapping feedback (is `ltx-2/i2v → ltx-2-fast`
+right, or should the Run name the concrete Magnific model directly?). Then build **real dispatch of a
+SINGLE routed Version** (he watches — it spends credits): execute via the Magnific REST runner → download
+→ `record_landed_take(version_id, address)` → `VersionRecorded` → the already-built Roustabout barrier +
+auto-publish fire. That lights up the whole spine end-to-end. (MCP-only Seedance dispatch stays deferred.)
+Prod `fleet` migration state (0004+0005) still unconfirmed — check before any prod writes.
+
 ## Session 12 (2026-07-02) — the Override store (ADR 0023) + the Cast engine: built, PROVEN, APPROVED
 The Session-11 "START HERE" is DONE: grilled the Override store (one AskUserQuestion round; Andy
 picked the recommended option), landed it, then built + proved Cast. **Andy drove the full card
