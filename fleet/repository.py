@@ -442,6 +442,19 @@ def get_binding_for_role(conn: psycopg.Connection, run_id: str, role: str):
     ).fetchone()
 
 
+def get_run_bindings(conn: psycopg.Connection, run_id: str) -> list[dict]:
+    """Every input binding on a Run with its resolved content URI — what the
+    Submitter's dispatch adapter feeds a Runner (an image_url / reference). The URI
+    is the binding's PINNED content (ADR 0005: frozen at bind time): the import URI,
+    else the pinned Publish's path. Ordered by role for stable display."""
+    cur = conn.cursor(row_factory=dict_row)
+    return cur.execute(
+        "SELECT b.role, COALESCE(b.pinned_import_uri, p.path) AS uri "
+        "FROM bindings b LEFT JOIN publishes p ON p.id = b.pinned_publish_id "
+        "WHERE b.run_id = %s ORDER BY b.role", (run_id,),
+    ).fetchall()
+
+
 def get_latest_run_publish(conn: psycopg.Connection, run_id: str):
     """The latest Publish whose source Version came from this Run — how a completed
     shared-recipe re-run offers its content back to the Cast (ADR 0018 auto-publish

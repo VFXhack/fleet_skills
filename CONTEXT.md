@@ -161,8 +161,18 @@ supervisor-gate promote) it emits **`PublishRecorded`** (ADR 0018). Both events 
 **`events` outbox** rows in the **same transaction** as the version/publish insert, then `NOTIFY`-ed
 (ADR 0019). It does **not** orchestrate downstream work (proxy, next steps) — that is the **Roustabout**'s
 job, fired by the event.
+**Single responsibility (ADR 0024):** the Submitter **submits one already-authored Run by id** — it does
+**not author** Runs (that is a *family* of front-ends — **Cast** now, a direct-author tool later,
+fixtures in test — that all feed it a `run_id`). `submit <run_id>` = load Run → **check a validation
+stamp** → **expand** `spec` into N Versions (ADR 0016) → **dispatch** each to a Runner. **Validation is
+its own separate gate**, not Submitter logic: a future `validate` tool *stamps* a Run at authoring time
+and any consumer (cast/promote/submit) calls it; since Runs are immutable the stamp never goes stale
+(validate once, trust forever). Built so far: `submit`'s **expand** half (`submitter/expand.py` pure
+per-type expander + `write_versions`, proven vs `fleet_test`); the validation stamp and dispatch are
+marked seams.
 _Avoid_: putting next-step / orchestration logic in the Submitter (or in DB triggers); emitting
-`VersionRecorded` before the output has landed.
+`VersionRecorded` before the output has landed; **authoring Runs inside the Submitter** (Cast / a future
+direct-author tool do that) or folding validation into it (separate gate).
 
 ### Orchestration (the Circus: Ringmaster over Roustabout)
 The post-`VersionRecorded` side of the system, split into **two named floors** (ADR 0012, amending 0010).

@@ -61,6 +61,30 @@ theater for farm+Roustabout, refuses non-fleet_test DSNs).
   refusing a prod DSN during testing (Session-11 hardening idea, still open); restyle
   `create-project`/`add-shot`/`add-sequence` (optional); per-shot `--input` re-demanded every
   generation (fine for now — could persist as declared inputs later if it annoys).
+- **Open (NEW, Session 13 — per-shot forward re-cast gap):** when a Shot is ALREADY cast at the
+  current `look_version` and then gets a **new/changed Override** (e.g. shot 05 client note "make
+  Salem's eye glow red" → a prompt param override + a Reference binding override), `cast` today
+  hits the `existing` branch (`cast.py:159–175`, keyed by `(shot_code, seq_code, look_version)`) and
+  **converges only — it ignores the new overrides and mints no new Run.** The two existing levers are
+  both wrong: bumping `look_version` is semantically false (the Look didn't change) AND re-casts the
+  whole sequence (all siblings get red eyes); converge-only is for finishing shared-recipe bindings.
+  **Missing = a per-shot *forward generation*:** a new Run for JUST that Shot, applying today's
+  overrides, old takes preserved (ADR 0013 forward-only), Look + siblings untouched. `cast_from`
+  tracks `look_version` but has **no per-shot gen counter** — that's the hole. Intended fix (a later
+  authoring-layer slice, NOT the Submitter): `cast_from` gains a per-shot `gen`, triggered by an
+  explicit `recast --supersede` OR by detecting the effective recipe (Look ⊕ current overrides) now
+  differs from the existing cast Run. **Data model already handles the scenario** — `shot_overrides`
+  has both a param form and a binding form; only the cast *machinery* to mint the new Run is missing.
+  Confirms the Submitter boundary: this is authoring's job (make the Run), the Submitter just submits it.
+- **Open (NEW, Session 13 — `spec` is threaded nowhere through Look/Cast):** `sequence_look_runs` has
+  **no `spec` column**; neither `insert_look_run` (Hoist) nor `insert_cast_run` (Cast) carries `spec`,
+  so a cast Run always has `spec = '{}'`. The Submitter's `expand` reads `runs.spec` — so until the
+  authoring layer threads spec, a cast Run expands to the type's empty-spec default (e.g. seed-sweep
+  with no seeds). Fix is authoring's, and it's a **design question, not just plumbing**: a cast Run
+  probably carries the *chosen* recipe from the approved take (a single frozen seed/params → 1 Version),
+  NOT a re-sweep — so Hoist likely captures the approved Version's frozen params as the Look's spec,
+  rather than copying the look-dev seed-sweep spec verbatim. Settle when building the per-shot forward
+  re-cast / spec-threading authoring slice. Does NOT block the Submitter (expand is spec-agnostic).
 
 **Single next action (START HERE): build the Submitter ingest/expand/dispatch slice.** Cast is
 approved and creates authored Runs, but nothing yet validates/expands `spec` into Versions
