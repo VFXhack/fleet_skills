@@ -74,6 +74,36 @@ This brief records the decisions that govern the reconciliation. The ADR audit
 - LTX union + bernini run-types; remaining launcher migrations
   (mocap_runner, sam3, smpl, blender render).
 
+## R1 grill rulings (2026-08-18, after the ADR audit)
+
+The audit (`ADR_REALITY_AUDIT.md`) surfaced six items the brief didn't rule on.
+Andy's rulings:
+
+- **R-1 · ADR 0002 amended: watts is the project store, huxley is compute.**
+  Canonical project trees on watts (`D:\Projects` now, `E:` for bulk); huxley
+  nvme is compute-local scratch whose keepers get pulled back and registered.
+- **R-2 · Proving lane runs in a real ADR-0003 tree with real shot codes** —
+  new runs only; existing `zombo_v002` artifacts stay in place and are
+  referenced/backfilled. **Same treatment for WBTV POM (TPOM)** — it becomes
+  the second onboarded project (pairs with the wave-1 external-API run-types).
+- **R-3 · The provenance DB is the system of record; Notion becomes a view.**
+  New run-types write only to the DB; comfy_runner's Notion hook survives until
+  its lane migrates; any future Notion dashboard is a one-way export from the DB.
+- **R-4 · The run.type enum names mechanical shapes, not recipes.** M8
+  multi-stage and nobg-convert are Spells under a generic convert/gen type;
+  flux2 polish dispatches as `refine`. New enum values only when
+  dispatch/validation genuinely differs.
+- **R-5 · One human promote seam.** Creative artifacts promote only via a
+  shotgate verdict (recorded in provenance). Deterministic passes (control
+  passes, plates, drivers) auto-publish boardless but still emit
+  VersionRecorded, and anything can be pulled onto a board for spot-QC.
+- **R-6 · Ops verified (2026-08-18):** prod `fleet` DB live on mckenna
+  (PG 17.10, tailnet 100.108.34.23) but at **migration 0003** — 0004/0005 not
+  applied (all tables empty, so applying is safe); `mempalace` confirmed on the
+  same cluster (ADR 0025 premise holds); **no automated pg backup exists** —
+  the ADR 0025 backup prerequisite is unmet. `~/.fleet/config.toml` exists on
+  watts and leary.
+
 ## R1 scope
 
 1. ✅ Clone to watts (this commit).
