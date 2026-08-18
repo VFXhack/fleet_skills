@@ -1,32 +1,31 @@
-# Leary D:\Tools triage (decision 8 — triage, not mirror)
+# Leary D:\Tools triage — EXECUTED 2026-08-18 (Session R1)
 
-Inventory taken 2026-08-18 (Session R1). Dispositions are RECOMMENDATIONS —
-Andy confirms before anything moves or is deleted.
+Inventory taken and dispositions executed 2026-08-18 with Andy's go-ahead.
+One major correction vs. the original sheet: **mocap_runner was never diverged.**
 
-| Dir | Size | Last touched | On watts? | Recommended disposition |
-|---|---|---|---|---|
-| `dev\fleet_skills` | 56.9 MB | 2026-07-06 | ✅ cloned 2026-08-18 | KEEP as clone. Git is the mirror; watts is primary. |
-| `mocap_runner` | 534.4 MB | **2026-08-16** | ✅ diverged copy | ⚠️ **Active divergence — highest risk.** Recently touched on BOTH machines. Needs a diff + git-ification with one canonical head before wave-2 migration. Do NOT hand-merge; diff first. |
-| `fleet_helpers` | ~0 MB | 2026-06-23 | ✅ copy exists | Diff vs watts, git-ify, one head. Now also hosts `leary_harvest_push.ps1` (created R1). |
-| `promise_ayon` | 20.1 MB | 2026-07-16 | ❌ (watts has `ayon_deploy`) | Move to `D:\Projects\Promise_RnD` orbit or merge into ayon_deploy's repo. It's project material, not a fleet tool. |
-| `bin` | 75.3 MB | 2026-06-15 | ❌ | Inventory contents; likely leary-local utilities — keep local, document in leary's own CLAUDE.md. |
-| `src` | 0.3 MB | 2026-06-24 | ❌ | Inspect; probably experiments → archive or fold into a repo. |
-| `butterfly_diagrams` | 0.3 MB | 2026-07-16 | ❌ | Move to `D:\Projects\Butterfly` (its project home) on watts. |
-| `.agents`, `.claude` | ~0.2 MB | 2026-07/08 | n/a | Leary-local session config — leave. |
+| Dir | Size | Status | What was done |
+|---|---|---|---|
+| `dev\fleet_skills` | 57 MB | ✅ done | Clone; pulled to R1 head. Watts is primary (`D:\Tools\dev\fleet_skills`). |
+| `mocap_runner` | 534 MB | ✅ done — **sheet was wrong** | BOTH machines were already clones of `VFXhack/mocap_runner`, in sync at `f7deb7c`. The "divergence" was CRLF checkout normalization (69 files, zero real diffs after normalizing — verified by normalized md5) + ~500 MB of gitignored QC render PNGs (`qc_batch/`, leary-local data). Committed watts' untracked `BERNINI_GUIDE.md` + `.gitattributes` (`* text=auto`), pushed `580ce59`, pulled on leary. |
+| `fleet_helpers` | tiny | ✅ done | Was NOT a repo on either side; file sets were disjoint (watts: cutter app + watts scripts; leary: leary/sshd scripts + new `leary_harvest_push.ps1`). Union-merged → new private repo **`VFXhack/fleet_helpers`** (`79f0d75`), both machines now clones. Harvest-push scheduled task path verified intact. |
+| `promise_ayon` | 20.1 MB | ✅ done | Copied to `watts:D:\Projects\Promise_RnD\promise_ayon` (640 files / 21,105,141 bytes, byte-verified). Leary original renamed `promise_ayon._migrated_2026-08-18` — delete whenever. |
+| `butterfly_diagrams` | 0.3 MB | ✅ done | Copied to `watts:D:\Projects\Butterfly\butterfly_diagrams` (4 files, byte-verified). Leary original renamed `._migrated_2026-08-18`. |
+| `bin` | 75 MB | ✅ keep local | It's `rclone.exe` + mount log. Leary-local utility, nothing to sync. |
+| `src` | 0.3 MB | ✅ keep local | Reference checkout of `mattpocock-skills` (the grill-with-docs upstream). Third-party, stays local. |
+| `.agents`, `.claude` | ~0.2 MB | ✅ leave | Leary-local session config. |
 
-## Related cleanups spotted during R1
+## Related cleanups — status
 
-- **`C:\Users\ajorl\fleet_skills` on watts** — stale third clone (same HEAD, no
-  divergent commits, only untracked `.claude/`/`.agents/`). Delete after
-  salvaging any wanted session config from those untracked dirs. KG already
-  retired its location fact.
-- **`D:\Tools\CLAUDE.md` (watts+leary)** — fleet-wide content now lives in
-  `~/.claude/CLAUDE.md` on both machines (deployed R1). The Tools copy should
-  shrink to Tools-local content — BUT its header says it's "synced" between
-  machines by an unidentified mechanism. Identify that sync before editing, or
-  edits may be clobbered/propagated unexpectedly.
-- **Watts palace harvest is a one-shot** — `~/fleet_mine/watts/harvest` on
-  mckenna has no recurring feeder (no push script exists on watts). Leary now
-  pushes nightly (3:00 AM task → 3:30 AM mine); watts deserves the same
-  `leary_harvest_push.ps1` pattern adapted, or the palace permanently lags
-  watts reality.
+- **`C:\Users\ajorl\fleet_skills`** — ✅ DELETED. Untracked `.claude/`, `.agents/`,
+  `skills-lock.json` archived first (66 files →
+  `D:\Tools\_archive\fleet_skills_userprofile_clone_2026-08-18\`). KG fact
+  already retired.
+- **`D:\Tools\CLAUDE.md` trim** — ⏳ still open. Fleet content now lives in
+  `~/.claude/CLAUDE.md` on both machines; identify the Tools-file sync
+  mechanism before shrinking it.
+- **Watts palace harvest** — ⏳ still one-shot. Leary pushes nightly
+  (`fleet_harvest_push` 3:00 AM); watts needs the same pattern or the palace
+  permanently lags watts.
+- **`comfy_runner` is not a git repo** — 📌 new find. It's a wave-1-adjacent
+  tool (the LTX submitter) with no version control; git-ify before its lane
+  migrates.
