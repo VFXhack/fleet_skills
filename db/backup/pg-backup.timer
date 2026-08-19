@@ -1,0 +1,11 @@
+# systemd USER unit (mckenna, andy) — ~/.config/systemd/user/pg-backup.timer
+# 02:30 nightly — before leary's 3:00 harvest push and mckenna's 3:30 fleet_mine.
+[Unit]
+Description=Timer for nightly pg_dump (ADR 0025)
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

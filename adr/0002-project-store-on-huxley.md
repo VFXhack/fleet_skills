@@ -1,6 +1,6 @@
 # ADR 0002 — Project store on Huxley, with a platform-neutral `base_path`
 
-**Status:** Accepted
+**Status:** Amended by ADR 0028 (2026-08-19) — store placement reversed to watts; the platform-neutral `base_path` mechanism stands
 **Date:** 2026-06-24
 
 ## Context

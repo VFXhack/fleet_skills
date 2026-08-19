@@ -104,6 +104,26 @@ Andy's rulings:
   the ADR 0025 backup prerequisite is unmet. `~/.fleet/config.toml` exists on
   watts and leary.
 
+## R2 status (2026-08-19)
+
+- ✅ ADRs promoted: **0025** (mckenna coexistence + backup gate), **0026** (shotgate
+  review context — Andy's four hardening questions grilled and answered inside it:
+  verdict→promote with legal zero-keep rounds; notes on verdict + board-resolution
+  rows; grades record-now-automate-later; shotgate joins the fleet DB, board id =
+  run_id), **0027** (AYON mapping constraint), **0028** (watts is the project store,
+  per R-1). Amended ADRs 0002/0008/0012/0018 status-stamped.
+- ✅ pg_dump timer live: `pg-backup.timer` (mckenna user unit, 02:30) →
+  `/mnt/shared/pg_backups`, watts task `FleetPgBackupPull` (04:00) →
+  `E:\backups\mckenna_pg`. First fleet dump verified both ends. **Open:** Andy adds
+  `MEMPALACE_DSN` to mckenna `~/.pg_backup_env` so the palace DB dumps too.
+- ✅ watts venv created (`.venv`, `pip install -e .`, psycopg 3.3.4); watts
+  `~/.fleet/config.toml` `projects_root` → `D:\Projects` per ADR 0028 (leary's
+  resolver entry for the watts store is an open item).
+- ⏸ Migrations 0004/0005: prod re-verified at 0003, all 8 tables empty, tool ready —
+  the write itself was blocked by session permissions. Andy runs:
+  `.venv\Scripts\python.exe db\apply_migrations.py --yes` (from repo root).
+- ⏭ Next: Session 14's live dispatch (after migrations; Andy in the loop per ADR 0024).
+
 ## R2 agenda (queued 2026-08-19)
 
 Openers (mechanical, in order): promote draft ADRs 0025/0026/0027 + the 0002

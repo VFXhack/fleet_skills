@@ -1,6 +1,6 @@
 # ADR 0018 — Roustabout FLOWS: two-tier reactions, bounded auto-publish, wired chains, and the `PublishRecorded` event
 
-**Status:** Accepted
+**Status:** Accepted · Amended by ADR 0026 (2026-08-19) — contact-sheet assembly + review notify move to shotgate; ledger/barrier/auto-publish stand
 **Date:** 2026-06-26
 **Refines:** ADR 0012 (Roustabout role), 0013 (Submitter writes `address`, emits `VersionRecorded`),
 0014 (`run.type` dispatch), 0016 (`spec` expands to N versions), 0017 (`control-pass`)

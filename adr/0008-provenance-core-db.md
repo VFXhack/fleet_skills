@@ -1,6 +1,6 @@
 # ADR 0008 — Provenance core: own thin Postgres on Mckenna (Notion demoted to a view; project index as a table)
 
-**Status:** Accepted
+**Status:** Accepted · Amended by ADR 0025 (2026-08-19) — MemPalace coexistence boundary + backup prerequisite
 **Date:** 2026-06-24
 **Amended by:** ADR 0020 (+ ADR 0021 rename) — a Sequence now carries a small **config** record (+ a
 Sequence Look of Look Runs) in this DB. The "Episode/Sequence/Shot structure is **never** stored in the DB" stance is

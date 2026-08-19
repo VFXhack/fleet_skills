@@ -1,0 +1,11 @@
+# systemd USER unit (mckenna, andy) — ~/.config/systemd/user/pg-backup.service
+# Nightly pg_dump per ADR 0025. Paired with pg-backup.timer.
+# StandardOutput=append (not journal) — see the apricity journald trap in D:\Tools\CLAUDE.md.
+[Unit]
+Description=Nightly pg_dump of fleet + mempalace (ADR 0025)
+
+[Service]
+Type=oneshot
+ExecStart=%h/bin/pg_backup.sh
+StandardOutput=append:%h/pg_backup.log
+StandardError=append:%h/pg_backup.log

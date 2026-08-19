@@ -1,6 +1,6 @@
 # ADR 0012 — Orchestration is two named floors: Ringmaster (agent) over Roustabout (deterministic worker); Griptape demoted
 
-**Status:** Accepted
+**Status:** Accepted · Amended by ADR 0026 (2026-08-19) — human-facing review duties move to shotgate
 **Date:** 2026-06-25
 **Amends:** ADR 0010
 **Amended by:** ADR 0013 (the `VersionRecorded` seam — the event fires after the take lands; the
