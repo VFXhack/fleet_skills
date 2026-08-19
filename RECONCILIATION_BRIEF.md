@@ -104,6 +104,34 @@ Andy's rulings:
   the ADR 0025 backup prerequisite is unmet. `~/.fleet/config.toml` exists on
   watts and leary.
 
+## R2 agenda (queued 2026-08-19)
+
+Openers (mechanical, in order): promote draft ADRs 0025/0026/0027 + the 0002
+amendment to numbered ADRs → apply migrations 0004/0005 to prod (verified empty)
+→ pg_dump timer on mckenna (ADR 0025 prerequisite) → `pip install -e .` venv on
+the watts clone → Session 14's live dispatch.
+
+**Hardening questions from Andy (2026-08-19) — these ARE the ADR 0026 contract
+grill; answer them when that ADR is written, not before:**
+
+1. **What do accept/reject actually DO?** Today: `resolve()` writes
+   `shotgate_resolution.<id>.json` (absolute keep/reject/winner paths) next to
+   the media and fires the board's optional `on_resolve` hook. Nothing else
+   consumes it unless a hook is wired. R2 must define: verdict → provenance
+   write (R-5's "one promote seam") → what downstream is *entitled* to assume.
+2. **How do per-shot / per-board NOTES flow into the next round?** Today:
+   stored in board state, read by humans/Claude ad hoc — no structured reuse.
+   R2 must decide where notes live in the provenance model (run.note? version
+   annotation?) so round N+1 prompts/recipes can cite round N's notes.
+3. **How are GRADES used?** Today: verdict/score per item drive keep/reject
+   counts and the resolution; scores go nowhere else. R2: do scores feed
+   recipe selection (e.g. seed picks), training-pair curation, or stay human
+   shorthand? Decide and record it.
+4. **What is the shotgate ↔ mckenna DB relationship?** Today: none — boards
+   are JSON next to media + a registry on watts. This is the ADR 0026 seam:
+   which board events land in Postgres (VersionRecorded, verdicts), what stays
+   file-local, and whether board identity = run_id.
+
 ## R1 scope
 
 1. ✅ Clone to watts (this commit).
