@@ -22,7 +22,7 @@ leary keeps a clone; git is the mirror). Fleet-wide machine facts live in
   non-`fleet_test` DSN.
 - The watts clone has **no venv yet** — `pip install -e .` before running CLIs.
 - shotgate (the review bounded context, per draft ADR 0026) lives at
-  `D:\Tools\shotgate`, v1.3.0, serves http://watts:8377.
+  `D:\Tools\shotgate`, v1.4.1, serves http://watts:8377.
 
 ## Rules of the road
 
