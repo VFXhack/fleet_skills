@@ -24,6 +24,13 @@ leary keeps a clone; git is the mirror). Fleet-wide machine facts live in
 - shotgate (the review bounded context, per draft ADR 0026) lives at
   `D:\Tools\shotgate`, v1.4.1, serves http://watts:8377.
 
+- **Personal finance is a separate system** (`family_cfo`): YNAB → daily net-worth /
+  cash-flow brief via Hermes cron on ramdass. Interim home: `VFXhack/philosopher-fleet-tools`
+  branch `feat/family-cfo`, `apps/family_cfo/` (split out to `VFXhack/family_cfo` when
+  Andy creates it). Plan + daily log live in Notion under *CFO Dashboard — Orloff Family
+  Finances*. It never touches this repo's spine; it is the first real consumer of the
+  Hermes cron pattern (decision 12's "Hermes waits for phase 2" does not apply to it).
+
 ## Rules of the road
 
 - Decisions get grilled with Andy before code (AskUserQuestion, one at a time,
